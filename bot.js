@@ -68,20 +68,20 @@ class ShopBot {
     
             async trackUserActivity(message) {
                 try {
-                // Ensure user exists before logging activity
-                await this.database.addUser(message.author.id, message.author.username, message.author.discriminator);
+                    // Ensure user exists before logging activity
+                    await this.database.addUser(message.author.id, message.author.username, message.author.discriminator);
         
-                await this.database.logMessage(
-                    message.id,
-                    message.author.id,
-                    message.channel.id,
-                    message.content.substring(0, 500), // Limit content length
-                    message.content.startsWith('!') ? message.content.split(' ')[0] : null
-                );
-            } catch (error) {
+                    await this.database.logMessage(
+                        message.id,
+                        message.author.id,
+                        message.channel.id,
+                        message.content.substring(0, 500), // Limit content length
+                        message.content.startsWith('!') ? message.content.split(' ')[0] : null
+                    );
+                } catch (error) {
                 console.error('Error tracking user activity:', error);
-            }
-        }    
+                }
+            }    
             // Handle persistent messages
             await this.handlePersistentMessage(message);
     
