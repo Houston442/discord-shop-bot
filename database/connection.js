@@ -300,7 +300,7 @@ class Database {
         }
     }
 
-    // Get transaction by ID
+    // Get transaction by ID with user info
     async getTransactionById(transactionId) {
         try {
             const result = await this.pool.query(
@@ -315,7 +315,7 @@ class Database {
             console.error('Error getting transaction by ID:', error);
             throw error;
         }
-    }
+    },
 
     // ==================== MESSAGE LOGGING METHODS ====================
 
