@@ -315,7 +315,7 @@ class Database {
             console.error('Error getting transaction by ID:', error);
             throw error;
         }
-    },
+    }
 
     // ==================== MESSAGE LOGGING METHODS ====================
 
