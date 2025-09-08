@@ -781,6 +781,29 @@ module.exports = {
                     inline: false 
                 },
 
+                // Message Commands Section (NEW)
+                { 
+                    name: '📝 **MESSAGE COMMANDS**', 
+                    value: '```' +
+                    '!message send Hello everyone :custom_emoji:\n' +
+                    '!message channel #general Welcome :wave:\n' +
+                    '!message sendembed Title | Description | #FF0000\n' +
+                    '!message announce everyone Server update :bell:\n' +
+                    '```', 
+                    inline: false 
+                },
+                { 
+                    name: '📝 Message Commands Explanations', 
+                    value: 
+                    '**`!message send <text>`** - Send message with custom emoji support\n' +
+                    '**`!message channel #channel <text>`** - Send message to specific channel\n' +
+                    '**`!message sendembed <title|desc|color>`** - Send embedded message\n' +
+                    '**`!message announce <everyone|here> <text>`** - Send announcement with ping\n' +
+                    '**`!message dm @user <text>`** - Send DM to user\n' +
+                    '**`!message edit <message_id> <new_text>`** - Edit existing bot message\n',
+                    inline: false 
+                },
+
                 // Content Monitoring Section
                 { 
                     name: '🎥 **CONTENT MONITORING**', 
@@ -833,20 +856,33 @@ module.exports = {
                     '!admin flagscammer @BadUser Tried to sell fake items\n\n' +
                     '# Complete a transaction\n' +
                     '!admin updatetransaction 15 completed\n\n' +
-                    '# Add YouTube channel monitoring\n' +
-                    '!admin addcreator youtube UCxyz123 GameReviewer #youtube\n\n' +
-                    '# Set welcome message\n' +
-                    '!admin setwelcome Welcome! Please read rules and select roles.\n' +
+                    '# Send custom message with emoji\n' +
+                    '!message send Welcome to the shop! :shop_icon: :diamond:\n\n' +
+                    '# Send announcement\n' +
+                    '!message announce everyone Maintenance tonight :tools:\n\n' +
+                    '# Set persistent message with emojis\n' +
+                    '!admin setpersistent #rules Follow the rules :warning: No scamming :x:\n' +
                     '```',
+                    inline: false 
+                },
+
+                // Emoji Usage Section (NEW)
+                { 
+                    name: '😀 **CUSTOM EMOJI USAGE**', 
+                    value: 
+                    '**Custom Server Emojis:** Use `:emoji_name:` format\n' +
+                    '   • `:shop_icon:`, `:verified:`, `:diamond:`, `:warning_sign:`\n\n' +
+                    '**Unicode Emojis:** Work normally in all commands\n' +
+                    '   • 🛒 💎 ⚠️ ✅ ❌ 🔔 🎉 ❤️ 🔥 ⭐\n\n' +
+                    '**Works in:** Messages, embeds, persistent messages, welcome DMs\n',
                     inline: false 
                 }
             )
             .setColor('#0099FF')
             .setFooter({ 
-                text: 'Replace @username with actual mentions, #channel with actual channels, and IDs with numbers' 
-            })
-            .setTimestamp();
-            
-        await message.reply({ embeds: [embed] });
-    }
-};
+                text: 'Use "!message help" for detailed message command examples' 
+        })
+        .setTimestamp();
+        
+    await message.reply({ embeds: [embed] });
+}
