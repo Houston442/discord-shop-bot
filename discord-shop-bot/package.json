@@ -1,0 +1,28 @@
+{
+  "name": "discord-shop-bot",
+  "version": "1.0.0",
+  "description": "Advanced Discord bot for game item shop management",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "nodemon bot.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "pg": "^8.11.3",
+    "dotenv": "^16.3.1",
+    "node-cron": "^3.0.3",
+    "axios": "^1.6.2",
+    "fs": "^0.0.2",
+    "path": "^0.12.7",
+    "googleapis": "^128.0.0",
+    "dropbox": "^10.34.0",
+    "ssh2-sftp-client": "^10.0.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
