@@ -1,4 +1,4 @@
-// commands/admin.js
+// commands/admin.js - Complete updated file
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
@@ -44,6 +44,14 @@ module.exports = {
                 
             case 'removecreator':
                 await this.removeCreator(message, args, database);
+                break;
+
+            case 'syncmembers':
+                await this.syncAllMembers(message, database);
+                break;
+
+            case 'stats':
+                await this.showStats(message, database);
                 break;
                 
             default:
@@ -106,6 +114,7 @@ module.exports = {
                 { name: 'Total Purchases', value: userInfo.total_purchases.toString(), inline: true },
                 { name: 'Total Spent', value: `$${userInfo.total_spent}`, inline: true },
                 { name: 'Is Scammer', value: userInfo.is_scammer ? '⚠️ YES' : '✅ No', inline: true },
+                { name: 'Last Activity', value: userInfo.last_activity?.toLocaleDateString() || 'Unknown', inline: true },
                 { name: 'Recent Transactions', value: transactions.slice(0, 5).map(t => `${t.item_name} - $${t.total_amount} (${t.status})`).join('\n') || 'None', inline: false }
             )
             .setColor(userInfo.is_scammer ? '#FF0000' : '#00FF00');
@@ -171,17 +180,139 @@ module.exports = {
         message.reply(`✅ Removed ${platform} creator: ${creatorId}`);
     },
 
+    async syncAllMembers(message, database) {
+        try {
+            const guild = message.guild;
+            const statusMessage = await message.reply('🔄 Starting member sync... This may take a moment.');
+
+            // Fetch all members (this gets members from cache and API)
+            const members = await guild.members.fetch();
+            
+            let addedCount = 0;
+            let updatedCount = 0;
+            let skippedCount = 0;
+            let errorCount = 0;
+
+            const totalMembers = members.size;
+            console.log(`Starting sync of ${totalMembers} members...`);
+
+            // Process members in batches to avoid overwhelming the database
+            const memberArray = Array.from(members.values());
+            const batchSize = 50;
+
+            for (let i = 0; i < memberArray.length; i += batchSize) {
+                const batch = memberArray.slice(i, i + batchSize);
+                
+                await Promise.all(batch.map(async (member) => {
+                    try {
+                        // Skip bots
+                        if (member.user.bot) {
+                            skippedCount++;
+                            return;
+                        }
+
+                        // Check if user already exists
+                        const existingUser = await database.getUserInfo(member.user.id);
+                        
+                        if (existingUser) {
+                            // Update existing user info (username might have changed)
+                            await database.updateUserInfo(member.user.id, member.user.username, member.user.discriminator);
+                            updatedCount++;
+                            console.log(`Updated user: ${member.user.username}`);
+                        } else {
+                            // Add new user
+                            await database.addUser(member.user.id, member.user.username, member.user.discriminator);
+                            addedCount++;
+                            console.log(`Added new user: ${member.user.username}`);
+                        }
+
+                    } catch (error) {
+                        console.error(`Error processing member ${member.user.username}:`, error);
+                        errorCount++;
+                    }
+                }));
+
+                // Update progress
+                const processed = Math.min(i + batchSize, memberArray.length);
+                const progressPercent = Math.round((processed / totalMembers) * 100);
+                
+                if (i % 100 === 0 || processed === totalMembers) { // Update every 100 members or at the end
+                    try {
+                        await statusMessage.edit(`🔄 Syncing members... ${processed}/${totalMembers} (${progressPercent}%)`);
+                    } catch (editError) {
+                        console.log('Could not edit status message:', editError.message);
+                    }
+                }
+            }
+
+            // Final results
+            const embed = new EmbedBuilder()
+                .setTitle('✅ Member Sync Complete!')
+                .setDescription('All Discord members have been synchronized with the database.')
+                .addFields(
+                    { name: '📊 Summary', value: '\u200B', inline: false },
+                    { name: 'Total Members Processed', value: totalMembers.toString(), inline: true },
+                    { name: 'New Users Added', value: addedCount.toString(), inline: true },
+                    { name: 'Existing Users Updated', value: updatedCount.toString(), inline: true },
+                    { name: 'Bots Skipped', value: skippedCount.toString(), inline: true },
+                    { name: 'Errors', value: errorCount.toString(), inline: true },
+                    { name: '\u200B', value: '\u200B', inline: true }
+                )
+                .setColor('#00FF00')
+                .setTimestamp()
+                .setFooter({ text: 'All members are now in the database!' });
+
+            await statusMessage.edit({ content: '', embeds: [embed] });
+            console.log(`Member sync completed: ${addedCount} added, ${updatedCount} updated, ${skippedCount} skipped, ${errorCount} errors`);
+
+        } catch (error) {
+            console.error('Error in syncAllMembers:', error);
+            await message.reply('❌ An error occurred during member sync. Check the logs for details.');
+        }
+    },
+
+    async showStats(message, database) {
+        try {
+            const totalUsers = await database.getTotalUserCount();
+            const activeUsers = await database.getUserCount(); // Non-scammers
+            const scammers = await database.getAllScammers();
+            const recentUsers = await database.getRecentUsers(5);
+
+            const embed = new EmbedBuilder()
+                .setTitle('📊 Server Statistics')
+                .addFields(
+                    { name: 'Total Users in Database', value: totalUsers.toString(), inline: true },
+                    { name: 'Active Users', value: activeUsers.toString(), inline: true },
+                    { name: 'Flagged Scammers', value: scammers.length.toString(), inline: true },
+                    { name: 'Recent Joins', value: recentUsers.map(u => `${u.username} (${new Date(u.join_date).toLocaleDateString()})`).join('\n') || 'None', inline: false }
+                )
+                .setColor('#0099FF')
+                .setTimestamp();
+
+            message.reply({ embeds: [embed] });
+        } catch (error) {
+            console.error('Error showing stats:', error);
+            message.reply('❌ Error retrieving statistics.');
+        }
+    },
+
     async showHelp(message) {
         const embed = new EmbedBuilder()
-            .setTitle('Admin Commands')
+            .setTitle('🔧 Admin Commands')
             .setDescription('Available admin commands:')
             .addFields(
-                { name: '`!admin setwelcome <message>`', value: 'Set the welcome DM message' },
+                { name: '**User Management**', value: '\u200B', inline: false },
+                { name: '`!admin syncmembers`', value: 'Add all Discord members to database' },
+                { name: '`!admin checkuser @user`', value: 'View user information and transaction history' },
+                { name: '`!admin stats`', value: 'Show server and database statistics' },
+                { name: '**Scammer Management**', value: '\u200B', inline: false },
                 { name: '`!admin flagscammer @user [reason]`', value: 'Flag a user as scammer' },
                 { name: '`!admin unflagscammer @user`', value: 'Remove scammer flag from user' },
-                { name: '`!admin checkuser @user`', value: 'View user information and transaction history' },
                 { name: '`!admin scammerlist`', value: 'List all flagged scammers' },
+                { name: '**Bot Configuration**', value: '\u200B', inline: false },
+                { name: '`!admin setwelcome <message>`', value: 'Set the welcome DM message' },
                 { name: '`!admin setpersistent #channel <message>`', value: 'Set persistent message for channel' },
+                { name: '**Content Monitoring**', value: '\u200B', inline: false },
                 { name: '`!admin addcreator <platform> <id> <name> #channel`', value: 'Add YouTube/Twitch creator for monitoring' },
                 { name: '`!admin removecreator <platform> <id>`', value: 'Remove creator from monitoring' }
             )
