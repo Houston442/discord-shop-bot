@@ -1,4 +1,4 @@
-// commands/admin.js - Complete Admin Commands File
+// commands/admin.js - Complete Admin Commands File with Message Integration
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
@@ -448,11 +448,14 @@ module.exports = {
         }
         
         try {
-            await database.setWelcomeMessage(newMessage);
+            // Process custom emojis in welcome message
+            const processedMessage = await this.processEmojis(newMessage, message.guild);
+            await database.setWelcomeMessage(processedMessage);
+            
             const embed = new EmbedBuilder()
                 .setTitle('✅ Welcome Message Updated')
                 .setDescription('New welcome message:')
-                .addFields({ name: 'Message', value: newMessage })
+                .addFields({ name: 'Message', value: processedMessage })
                 .setColor('#00FF00')
                 .setTimestamp();
             
@@ -472,7 +475,9 @@ module.exports = {
         }
         
         try {
-            await database.setPersistentChannel(channelId, persistentMessage);
+            // Process custom emojis in persistent message
+            const processedMessage = await this.processEmojis(persistentMessage, message.guild);
+            await database.setPersistentChannel(channelId, processedMessage);
             await message.reply(`✅ Persistent message set for <#${channelId}>!`);
         } catch (error) {
             console.error('Error setting persistent message:', error);
@@ -696,157 +701,21 @@ module.exports = {
         }
     },
 
-    // ==================== HELP COMMAND ====================
+    // ==================== UTILITY METHODS ====================
 
-    async showHelp(message) {
-        const embed = new EmbedBuilder()
-            .setTitle('🔧 Complete Admin Commands Guide')
-            .setDescription('All available admin commands with exact syntax:')
-            .addFields(
-                // User Management Section
-                { 
-                    name: '👥 **USER MANAGEMENT**', 
-                    value: '```' +
-                    '!admin syncmembers\n' +
-                    '!admin checkuser @username\n' +
-                    '!admin stats\n' +
-                    '```', 
-                    inline: false 
-                },
-                { 
-                    name: '📝 User Management Explanations', 
-                    value: 
-                    '**`!admin syncmembers`** - Add all Discord server members to database\n' +
-                    '**`!admin checkuser @username`** - View detailed user info, transactions, and activity\n' +
-                    '**`!admin stats`** - Show server statistics and database overview\n',
-                    inline: false 
-                },
-
-                // Scammer Management Section
-                { 
-                    name: '🚨 **SCAMMER MANAGEMENT**', 
-                    value: '```' +
-                    '!admin flagscammer @username reason here\n' +
-                    '!admin unflagscammer @username\n' +
-                    '!admin scammerlist\n' +
-                    '```', 
-                    inline: false 
-                },
-                { 
-                    name: '📝 Scammer Management Explanations', 
-                    value: 
-                    '**`!admin flagscammer @user reason`** - Flag user as scammer with optional reason\n' +
-                    '**`!admin unflagscammer @user`** - Remove scammer flag from user\n' +
-                    '**`!admin scammerlist`** - Display all flagged scammers with notes\n',
-                    inline: false 
-                },
-
-                // Transaction Management Section
-                { 
-                    name: '💰 **TRANSACTION MANAGEMENT**', 
-                    value: '```' +
-                    '!admin updatetransaction 1 completed\n' +
-                    '!admin updatetransaction 2 failed\n' +
-                    '!admin alltransactions\n' +
-                    '!admin pendingtransactions\n' +
-                    '```', 
-                    inline: false 
-                },
-                { 
-                    name: '📝 Transaction Management Explanations', 
-                    value: 
-                    '**`!admin updatetransaction <ID> <status>`** - Update transaction status\n' +
-                    '   • Status options: pending, completed, failed, disputed, cancelled\n' +
-                    '**`!admin alltransactions`** - View all recent transactions\n' +
-                    '**`!admin pendingtransactions`** - View only pending transactions\n',
-                    inline: false 
-                },
-
-                // Bot Configuration Section
-                { 
-                    name: '⚙️ **BOT CONFIGURATION**', 
-                    value: '```' +
-                    '!admin setwelcome Your welcome message here\n' +
-                    '!admin setpersistent #channel Your message\n' +
-                    '!admin removepersistent #channel\n' +
-                    '```', 
-                    inline: false 
-                },
-                { 
-                    name: '📝 Bot Configuration Explanations', 
-                    value: 
-                    '**`!admin setwelcome <message>`** - Set welcome DM for new members\n' +
-                    '**`!admin setpersistent #channel <msg>`** - Message always stays last in channel\n' +
-                    '**`!admin removepersistent #channel`** - Remove persistent message\n',
-                    inline: false 
-                },
-
-                // Content Monitoring Section
-                { 
-                    name: '🎥 **CONTENT MONITORING**', 
-                    value: '```' +
-                    '!admin addcreator youtube UCChannelID Name #updates\n' +
-                    '!admin addcreator twitch streamername Name #live\n' +
-                    '!admin removecreator youtube UCChannelID\n' +
-                    '!admin listcreators\n' +
-                    '```', 
-                    inline: false 
-                },
-                { 
-                    name: '📝 Content Monitoring Explanations', 
-                    value: 
-                    '**`!admin addcreator <platform> <id> <n> #channel`**\n' +
-                    '   • Auto-post when creator uploads/goes live\n' +
-                    '   • Platform: youtube or twitch\n' +
-                    '**`!admin removecreator <platform> <id>`** - Stop monitoring creator\n' +
-                    '**`!admin listcreators`** - Show all monitored creators\n',
-                    inline: false 
-                },
-
-                // Database & Backup Section
-                { 
-                    name: '💾 **DATABASE & BACKUP**', 
-                    value: '```' +
-                    '!admin backup\n' +
-                    '!admin dbstats\n' +
-                    '!admin testdb\n' +
-                    '!admin cleanup\n' +
-                    '```', 
-                    inline: false 
-                },
-                { 
-                    name: '📝 Database & Backup Explanations', 
-                    value: 
-                    '**`!admin backup`** - Manually trigger database backup\n' +
-                    '**`!admin dbstats`** - Show detailed database statistics\n' +
-                    '**`!admin testdb`** - Test database connection\n' +
-                    '**`!admin cleanup`** - Clean old messages/data (30+ days)\n',
-                    inline: false 
-                },
-
-                // Quick Examples Section
-                { 
-                    name: '💡 **QUICK EXAMPLES**', 
-                    value: 
-                    '```\n' +
-                    '# Flag a scammer\n' +
-                    '!admin flagscammer @BadUser Tried to sell fake items\n\n' +
-                    '# Complete a transaction\n' +
-                    '!admin updatetransaction 15 completed\n\n' +
-                    '# Add YouTube channel monitoring\n' +
-                    '!admin addcreator youtube UCxyz123 GameReviewer #youtube\n\n' +
-                    '# Set welcome message\n' +
-                    '!admin setwelcome Welcome! Please read rules and select roles.\n' +
-                    '```',
-                    inline: false 
+    // Process custom emojis in message content
+    async processEmojis(content, guild) {
+        try {
+            // Replace :emoji_name: with actual custom emoji
+            return content.replace(/:(\w+):/g, (match, emojiName) => {
+                // Find custom emoji in guild
+                const customEmoji = guild.emojis.cache.find(emoji => emoji.name === emojiName);
+                if (customEmoji) {
+                    return customEmoji.toString();
                 }
-            )
-            .setColor('#0099FF')
-            .setFooter({ 
-                text: 'Replace @username with actual mentions, #channel with actual channels, and IDs with numbers' 
-            })
-            .setTimestamp();
-            
-        await message.reply({ embeds: [embed] });
-    }
-};
+                // If not found, keep original format (might be Unicode emoji)
+                return match;
+            });
+        } catch (error) {
+            console.error('Error processing emojis:', error);
+            return content
