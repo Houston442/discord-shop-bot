@@ -27,7 +27,11 @@ module.exports = {
     },
 
     async createTransaction(message, args, database) {
-        // Check if user is flagged as scammer
+    try {
+        // FIRST: Ensure user exists in database
+        await database.addUser(message.author.id, message.author.username, message.author.discriminator);
+        
+        // THEN: Check if user is flagged as scammer
         const userInfo = await database.getUserInfo(message.author.id);
         if (userInfo?.is_scammer) {
             return message.reply('❌ You are not allowed to make transactions. Contact an administrator if you believe this is an error.');
@@ -43,6 +47,7 @@ module.exports = {
         
         const totalAmount = quantity * unitPrice;
         
+        // Create transaction (user definitely exists now)
         const transactionId = await database.addTransaction(
             message.author.id,
             itemName,
@@ -65,7 +70,12 @@ module.exports = {
             .setFooter({ text: 'Please wait for admin confirmation' });
             
         message.reply({ embeds: [embed] });
-    },
+        
+    } catch (error) {
+        console.error('Error in createTransaction:', error);
+        message.reply('❌ An error occurred while creating the transaction. Please try again.');
+    }
+},
 
     async showHistory(message, database) {
         const transactions = await database.getUserTransactions(message.author.id);
