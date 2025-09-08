@@ -62,15 +62,19 @@ class ShopBot {
         // Message create (Activity tracking & Persistent messages)
         this.client.on('messageCreate', async (message) => {
             if (message.author.bot) return;
-            
+    
+            // Add this debug line
+            console.log(`Received message: ${message.content} from ${message.author.username} in guild: ${message.guild?.id}`);
+    
             // Track user activity
             await this.trackUserActivity(message);
-            
+    
             // Handle persistent messages
             await this.handlePersistentMessage(message);
-            
+    
             // Handle commands
             if (message.content.startsWith('!')) {
+                console.log(`Processing command: ${message.content}`);
                 await this.handleCommand(message);
             }
         });
