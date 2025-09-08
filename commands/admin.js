@@ -1,4 +1,4 @@
-// commands/admin.js - Complete Admin Commands File
+// commands/admin.js - Complete Admin Commands File with All Features
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
@@ -449,6 +449,7 @@ module.exports = {
         
         try {
             await database.setWelcomeMessage(newMessage);
+            
             const embed = new EmbedBuilder()
                 .setTitle('✅ Welcome Message Updated')
                 .setDescription('New welcome message:')
@@ -781,6 +782,54 @@ module.exports = {
                     inline: false 
                 },
 
+                // MESSAGE COMMANDS SECTION (NEW DETAILED SECTION)
+                { 
+                    name: '📝 **MESSAGE COMMANDS - DETAILED GUIDE**', 
+                    value: '```' +
+                    '!message send Hello everyone :custom_emoji:\n' +
+                    '!message channel #general Welcome to the shop!\n' +
+                    '!message sendembed Title | Description | #FF0000\n' +
+                    '!message announce everyone Server update!\n' +
+                    '!message dm @user Thanks for your purchase!\n' +
+                    '!message edit 123456789 Updated text here\n' +
+                    '```', 
+                    inline: false 
+                },
+                { 
+                    name: '📝 Message Commands Detailed Explanations', 
+                    value: 
+                    '**`!message send <text>`** - Send message in current channel with emoji support\n' +
+                    '**`!message channel #channel <text>`** - Send message to specific channel\n' +
+                    '**`!message sendembed <title|desc|color>`** - Send rich embedded message\n' +
+                    '**`!message announce <everyone|here> <text>`** - Send announcement with ping\n' +
+                    '**`!message dm @user <text>`** - Send direct message to user\n' +
+                    '**`!message edit <message_id> <new_text>`** - Edit existing bot message\n' +
+                    '\n**Usage Examples:**\n' +
+                    '• `!message send Welcome! :shop_icon: Check our deals :fire:`\n' +
+                    '• `!message sendembed Shop Rules | No scamming :warning: | #FF0000`\n' +
+                    '• `!message announce everyone Maintenance tonight :tools:`\n',
+                    inline: false 
+                },
+
+                // CUSTOM EMOJI SUPPORT SECTION (ENHANCED)
+                { 
+                    name: '😀 **CUSTOM EMOJI SUPPORT - COMPLETE GUIDE**', 
+                    value: 
+                    '**Custom Server Emojis:** Use `:emoji_name:` format in ALL commands\n' +
+                    '   • `:shop_icon:`, `:verified:`, `:diamond:`, `:warning_sign:`\n' +
+                    '   • `:money_bag:`, `:shield:`, `:crown:`, `:fire:`\n\n' +
+                    '**Unicode Emojis:** Work normally everywhere\n' +
+                    '   • 🛒 💎 ⚠️ ✅ ❌ 🔔 🎉 ❤️ 🔥 ⭐ 💰 🛡️\n\n' +
+                    '**Works In:**\n' +
+                    '   • All message commands (`!message send`, `!message channel`, etc.)\n' +
+                    '   • Welcome messages (`!admin setwelcome`)\n' +
+                    '   • Persistent messages (`!admin setpersistent`)\n' +
+                    '   • Embed descriptions and titles\n' +
+                    '   • Announcements and DMs\n\n' +
+                    '**Example with emojis:** `!message send :diamond: VIP Sale! :fire: 50% off all items :money_bag:`\n',
+                    inline: false 
+                },
+
                 // Content Monitoring Section
                 { 
                     name: '🎥 **CONTENT MONITORING**', 
@@ -824,26 +873,48 @@ module.exports = {
                     inline: false 
                 },
 
-                // Quick Examples Section
+                // REAL WORLD EXAMPLES SECTION (ENHANCED)
                 { 
-                    name: '💡 **QUICK EXAMPLES**', 
+                    name: '💡 **REAL WORLD SHOP EXAMPLES**', 
                     value: 
                     '```\n' +
-                    '# Flag a scammer\n' +
-                    '!admin flagscammer @BadUser Tried to sell fake items\n\n' +
-                    '# Complete a transaction\n' +
-                    '!admin updatetransaction 15 completed\n\n' +
-                    '# Add YouTube channel monitoring\n' +
-                    '!admin addcreator youtube UCxyz123 GameReviewer #youtube\n\n' +
-                    '# Set welcome message\n' +
-                    '!admin setwelcome Welcome! Please read rules and select roles.\n' +
+                    '# Welcome new customers with style\n' +
+                    '!admin setwelcome :shop_icon: Welcome to Tesco Market! :diamond:\n' +
+                    'Browse our items safely and select your roles below! :shield:\n\n' +
+                    '# Set trading rules with emojis\n' +
+                    '!admin setpersistent #rules :warning: TRADING RULES :warning:\n' +
+                    ':one: Use our middleman service :shield:\n' +
+                    ':two: No direct trades :x: Report scammers :police_car:\n\n' +
+                    '# Announce flash sales\n' +
+                    '!message announce everyone :fire: FLASH SALE :fire:\n' +
+                    '50% off rare items for next 2 hours! :money_bag:\n\n' +
+                    '# Send professional DMs to customers\n' +
+                    '!message dm @customer :heart: Thank you for your purchase!\n' +
+                    'Your order is being processed :gear: Questions? Contact staff! :speech_balloon:\n\n' +
+                    '# Create shop announcements\n' +
+                    '!message channel #announcements :new: NEW ITEMS ADDED :new:\n' +
+                    ':diamond: Legendary weapons now available! :crossed_swords:\n' +
                     '```',
+                    inline: false 
+                },
+
+                // QUICK REFERENCE SECTION
+                { 
+                    name: '⚡ **QUICK REFERENCE**', 
+                    value: 
+                    '**Most Used Commands:**\n' +
+                    '• `!message send <text>` - Quick message with emoji support\n' +
+                    '• `!admin flagscammer @user <reason>` - Flag scammers\n' +
+                    '• `!admin updatetransaction <id> completed` - Complete sales\n' +
+                    '• `!admin setpersistent #channel <message>` - Set rules/info\n' +
+                    '• `!message announce everyone <text>` - Server announcements\n\n' +
+                    '**For Full Details:** Use `!message help` for complete message command guide\n',
                     inline: false 
                 }
             )
             .setColor('#0099FF')
             .setFooter({ 
-                text: 'Replace @username with actual mentions, #channel with actual channels, and IDs with numbers' 
+                text: 'Use "!message help" for detailed message examples | All commands support custom emojis' 
             })
             .setTimestamp();
             
