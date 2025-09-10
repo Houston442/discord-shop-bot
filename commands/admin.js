@@ -1,4 +1,4 @@
-// commands/admin.js - Slash Command Version
+// commands/admin.js - Clean Slash Command Version
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
@@ -228,11 +228,9 @@ module.exports = {
         }
     },
 
-    // ==================== USER MANAGEMENT ====================
-
     async syncAllMembers(interaction, database) {
         try {
-            await interaction.deferReply(); // This can take time
+            await interaction.deferReply();
             
             const guild = interaction.guild;
             const members = await guild.members.fetch();
@@ -243,8 +241,6 @@ module.exports = {
             let errorCount = 0;
 
             const totalMembers = members.size;
-            console.log(`Starting sync of ${totalMembers} members...`);
-
             const memberArray = Array.from(members.values());
             const batchSize = 50;
 
@@ -267,30 +263,7 @@ module.exports = {
                             await database.addUser(member.user.id, member.user.username, member.user.discriminator);
                             addedCount++;
                         }
-                        console.error('Error testing database:', error);
-            await interaction.reply('❌ Database test failed.');
-        }
-    },
-
-    async cleanupOldData(interaction, database) {
-        try {
-            await interaction.deferReply();
-            
-            const messagesResult = await database.pool.query(
-                "DELETE FROM messages WHERE timestamp < NOW() - INTERVAL '30 days'"
-            );
-            
-            const deletedMessages = messagesResult.rowCount;
-
-            await interaction.editReply(`✅ Cleanup completed! Removed ${deletedMessages} old messages (30+ days old).`);
-            console.log(`Data cleanup: removed ${deletedMessages} old messages`);
-
-        } catch (error) {
-            console.error('Error during cleanup:', error);
-            await interaction.editReply('❌ Error during cleanup.');
-        }
-    }
-};
+                    } catch (error) {
                         console.error(`Error processing member ${member.user.username}:`, error);
                         errorCount++;
                     }
@@ -325,7 +298,7 @@ module.exports = {
 
         } catch (error) {
             console.error('Error in syncAllMembers:', error);
-            const errorMessage = 'An error occurred during member sync. Check the logs for details.';
+            const errorMessage = 'An error occurred during member sync.';
             if (interaction.deferred) {
                 await interaction.editReply(errorMessage);
             } else {
@@ -420,7 +393,6 @@ module.exports = {
                 .setTimestamp();
             
             await interaction.reply({ embeds: [embed] });
-            console.log(`User ${user.id} flagged as scammer by ${interaction.user.username}: ${reason}`);
         } catch (error) {
             console.error('Error flagging scammer:', error);
             await interaction.reply('❌ Error flagging user as scammer.');
@@ -433,7 +405,6 @@ module.exports = {
         try {
             await database.unflagUserAsScammer(user.id);
             await interaction.reply(`✅ User <@${user.id}> has been unflagged successfully!`);
-            console.log(`User ${user.id} unflagged by ${interaction.user.username}`);
         } catch (error) {
             console.error('Error unflagging scammer:', error);
             await interaction.reply('❌ Error unflagging user.');
@@ -749,3 +720,27 @@ module.exports = {
             await interaction.reply({ embeds: [embed] });
 
         } catch (error) {
+            console.error('Error testing database:', error);
+            await interaction.reply('❌ Database test failed.');
+        }
+    },
+
+    async cleanupOldData(interaction, database) {
+        try {
+            await interaction.deferReply();
+            
+            const messagesResult = await database.pool.query(
+                "DELETE FROM messages WHERE timestamp < NOW() - INTERVAL '30 days'"
+            );
+            
+            const deletedMessages = messagesResult.rowCount;
+
+            await interaction.editReply(`✅ Cleanup completed! Removed ${deletedMessages} old messages (30+ days old).`);
+            console.log(`Data cleanup: removed ${deletedMessages} old messages`);
+
+        } catch (error) {
+            console.error('Error during cleanup:', error);
+            await interaction.editReply('❌ Error during cleanup.');
+        }
+    }
+};
