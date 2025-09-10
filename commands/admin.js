@@ -1,4 +1,4 @@
-// commands/admin.js - Clean Slash Command Version
+// commands/admin.js - Complete Slash Command Version with URL Support
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
@@ -106,7 +106,7 @@ module.exports = {
         .addSubcommand(subcommand =>
             subcommand
                 .setName('addcreator')
-                .setDescription('Add creator for monitoring (YouTube/Twitch)')
+                .setDescription('Add creator for monitoring using URL or ID')
                 .addStringOption(option =>
                     option.setName('platform')
                         .setDescription('Platform type')
@@ -116,13 +116,13 @@ module.exports = {
                             { name: 'Twitch', value: 'twitch' }
                         ))
                 .addStringOption(option =>
-                    option.setName('creator_id')
-                        .setDescription('Creator ID or username')
+                    option.setName('url_or_id')
+                        .setDescription('YouTube/Twitch URL or channel ID/username')
                         .setRequired(true))
                 .addStringOption(option =>
                     option.setName('creator_name')
-                        .setDescription('Display name for the creator')
-                        .setRequired(true))
+                        .setDescription('Display name for the creator (optional - will auto-fetch if not provided)')
+                        .setRequired(false))
                 .addChannelOption(option =>
                     option.setName('channel')
                         .setDescription('Discord channel to post notifications')
@@ -227,6 +227,8 @@ module.exports = {
                 break;
         }
     },
+
+    // ==================== USER MANAGEMENT ====================
 
     async syncAllMembers(interaction, database) {
         try {
@@ -376,6 +378,8 @@ module.exports = {
         }
     },
 
+    // ==================== SCAMMER MANAGEMENT ====================
+
     async flagScammer(interaction, database) {
         const user = interaction.options.getUser('user');
         const reason = interaction.options.getString('reason') || 'No reason provided';
@@ -434,6 +438,8 @@ module.exports = {
             await interaction.reply('❌ Error retrieving scammers list.');
         }
     },
+
+    // ==================== TRANSACTION MANAGEMENT ====================
 
     async updateTransaction(interaction, database) {
         try {
@@ -522,6 +528,8 @@ module.exports = {
         }
     },
 
+    // ==================== BOT CONFIGURATION ====================
+
     async setWelcomeMessage(interaction, database) {
         const message = interaction.options.getString('message');
         
@@ -567,18 +575,63 @@ module.exports = {
         }
     },
 
+    // ==================== CONTENT MONITORING WITH URL SUPPORT ====================
+
     async addCreator(interaction, database) {
         const platform = interaction.options.getString('platform');
-        const creatorId = interaction.options.getString('creator_id');
-        const creatorName = interaction.options.getString('creator_name');
+        const urlOrId = interaction.options.getString('url_or_id');
+        const customName = interaction.options.getString('creator_name');
         const channel = interaction.options.getChannel('channel');
         
         try {
+            await interaction.deferReply();
+            
+            let creatorId;
+            let creatorName;
+            
+            if (platform === 'youtube') {
+                const youtubeData = await this.extractYouTubeInfo(urlOrId);
+                if (!youtubeData) {
+                    return await interaction.editReply('❌ Invalid YouTube URL or channel ID. Please check and try again.');
+                }
+                creatorId = youtubeData.channelId;
+                creatorName = customName || youtubeData.channelName || 'Unknown Creator';
+                
+            } else if (platform === 'twitch') {
+                const twitchData = await this.extractTwitchInfo(urlOrId);
+                if (!twitchData) {
+                    return await interaction.editReply('❌ Invalid Twitch URL or username. Please check and try again.');
+                }
+                creatorId = twitchData.username;
+                creatorName = customName || twitchData.displayName || twitchData.username;
+            }
+            
+            // Check if creator already exists
+            const existingCreators = await database.getCreators(platform);
+            const existingCreator = existingCreators.find(c => c.creator_id === creatorId);
+            
+            if (existingCreator) {
+                return await interaction.editReply(`❌ ${platform === 'youtube' ? 'YouTube channel' : 'Twitch streamer'} **${existingCreator.creator_name}** is already being monitored in <#${existingCreator.channel_id}>.`);
+            }
+            
             await database.addCreator(platform, creatorId, creatorName, channel.id);
-            await interaction.reply(`✅ Added ${platform} creator: **${creatorName}** → <#${channel.id}>`);
+            
+            const embed = new EmbedBuilder()
+                .setTitle('✅ Creator Added Successfully')
+                .addFields(
+                    { name: 'Platform', value: platform === 'youtube' ? 'YouTube' : 'Twitch', inline: true },
+                    { name: 'Creator', value: creatorName, inline: true },
+                    { name: 'Notification Channel', value: `<#${channel.id}>`, inline: true },
+                    { name: 'Creator ID', value: creatorId, inline: true }
+                )
+                .setColor('#00FF00')
+                .setTimestamp();
+                
+            await interaction.editReply({ embeds: [embed] });
+            
         } catch (error) {
             console.error('Error adding creator:', error);
-            await interaction.reply('❌ Error adding creator.');
+            await interaction.editReply('❌ Error adding creator. Please try again.');
         }
     },
 
@@ -636,6 +689,129 @@ module.exports = {
         }
     },
 
+    // ==================== URL EXTRACTION HELPERS ====================
+
+    async extractTwitchInfo(input) {
+        try {
+            let username = null;
+            let displayName = null;
+            
+            // If it's a Twitch URL
+            if (input.includes('twitch.tv')) {
+                const match = input.match(/twitch\.tv\/([^\/\?]+)/);
+                if (match) {
+                    username = match[1].toLowerCase();
+                }
+            } else {
+                // Assume it's just a username
+                username = input.toLowerCase().replace('@', '');
+            }
+            
+            // Validate username format (Twitch usernames are 4-25 characters, alphanumeric + underscore)
+            if (username && /^[a-zA-Z0-9_]{4,25}$/.test(username)) {
+                // Try to get display name from Twitch API if available
+                if (process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET) {
+                    displayName = await this.getTwitchDisplayName(username);
+                }
+                
+                return { username, displayName };
+            }
+            
+            return null;
+            
+        } catch (error) {
+            console.error('Error extracting Twitch info:', error);
+            return null;
+        }
+    },
+
+    // YouTube API helper methods
+    async getYouTubeChannelName(channelId) {
+        try {
+            if (!process.env.YOUTUBE_API_KEY) return null;
+            
+            const axios = require('axios');
+            const response = await axios.get('https://www.googleapis.com/youtube/v3/channels', {
+                params: {
+                    key: process.env.YOUTUBE_API_KEY,
+                    id: channelId,
+                    part: 'snippet'
+                }
+            });
+            
+            if (response.data.items && response.data.items.length > 0) {
+                return response.data.items[0].snippet.title;
+            }
+            
+            return null;
+        } catch (error) {
+            console.error('Error getting YouTube channel name:', error);
+            return null;
+        }
+    },
+
+    async resolveYouTubeUsername(username) {
+        try {
+            if (!process.env.YOUTUBE_API_KEY) return null;
+            
+            const axios = require('axios');
+            const response = await axios.get('https://www.googleapis.com/youtube/v3/channels', {
+                params: {
+                    key: process.env.YOUTUBE_API_KEY,
+                    forUsername: username,
+                    part: 'id'
+                }
+            });
+            
+            if (response.data.items && response.data.items.length > 0) {
+                return response.data.items[0].id;
+            }
+            
+            return null;
+        } catch (error) {
+            console.error('Error resolving YouTube username:', error);
+            return null;
+        }
+    },
+
+    async getChannelFromVideo(videoId) {
+        try {
+            if (!process.env.YOUTUBE_API_KEY) return null;
+            
+            const axios = require('axios');
+            const response = await axios.get('https://www.googleapis.com/youtube/v3/videos', {
+                params: {
+                    key: process.env.YOUTUBE_API_KEY,
+                    id: videoId,
+                    part: 'snippet'
+                }
+            });
+            
+            if (response.data.items && response.data.items.length > 0) {
+                return response.data.items[0].snippet.channelId;
+            }
+            
+            return null;
+        } catch (error) {
+            console.error('Error getting channel from video:', error);
+            return null;
+        }
+    },
+
+    // Twitch API helper method
+    async getTwitchDisplayName(username) {
+        try {
+            // This would require your existing Twitch monitor's getAccessToken method
+            // For now, just return the username capitalized
+            return username.charAt(0).toUpperCase() + username.slice(1);
+        } catch (error) {
+            console.error('Error getting Twitch display name:', error);
+            return username;
+        }
+    },
+
+    // ==================== DATABASE & BACKUP ====================
+
     async manualBackup(interaction, database) {
         try {
             await interaction.deferReply();
@@ -688,7 +864,7 @@ module.exports = {
                     { name: '📝 Messages', value: `${stats.messages_count || 0} logged`, inline: true },
                     { name: '🎥 Creators', value: `${stats.creators_count || 0} monitored`, inline: true },
                     { name: '📌 Persistent Channels', value: `${stats.persistent_channels_count || 0} active`, inline: true },
-                    { name: '💵 Total Revenue', value: `$${(stats.total_revenue || 0).toFixed(2)}`, inline: true }
+                    { name: '💵 Total Revenue', value: `${(stats.total_revenue || 0).toFixed(2)}`, inline: true }
                 )
                 .setColor('#00FF99')
                 .setTimestamp();
@@ -743,4 +919,47 @@ module.exports = {
             await interaction.editReply('❌ Error during cleanup.');
         }
     }
-};
+};YouTubeInfo(input) {
+        try {
+            let channelId = null;
+            let channelName = null;
+            
+            // If it's already a channel ID (starts with UC)
+            if (input.startsWith('UC') && input.length === 24) {
+                channelId = input;
+            }
+            // If it's a YouTube URL
+            else if (input.includes('youtube.com') || input.includes('youtu.be')) {
+                // Extract channel ID from various YouTube URL formats
+                const channelMatch = input.match(/(?:youtube\.com\/channel\/|youtube\.com\/c\/|youtube\.com\/user\/|youtube\.com\/@)([^\/\?]+)/);
+                const videoMatch = input.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^\/\?\&]+)/);
+                
+                if (channelMatch) {
+                    const extracted = channelMatch[1];
+                    // If it's already a channel ID
+                    if (extracted.startsWith('UC')) {
+                        channelId = extracted;
+                    } else {
+                        // It's a custom username - we'll need to resolve it via API
+                        channelId = await this.resolveYouTubeUsername(extracted);
+                    }
+                } else if (videoMatch) {
+                    // Extract channel from video URL via API
+                    channelId = await this.getChannelFromVideo(videoMatch[1]);
+                }
+            }
+            
+            // Try to get channel name if we have the ID
+            if (channelId && process.env.YOUTUBE_API_KEY) {
+                channelName = await this.getYouTubeChannelName(channelId);
+            }
+            
+            return channelId ? { channelId, channelName } : null;
+            
+        } catch (error) {
+            console.error('Error extracting YouTube info:', error);
+            return null;
+        }
+    },
+
+    async extract
