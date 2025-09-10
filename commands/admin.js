@@ -851,7 +851,7 @@ module.exports = {
             console.error('Error getting Twitch display name:', error);
             return username;
         }
-    }
+    },
 
     // ==================== DATABASE & BACKUP ====================
 
