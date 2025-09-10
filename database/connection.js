@@ -46,7 +46,7 @@ class Database {
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`,
 
-            // Messages/Activity table
+            // Messages/Activity table - NOW ONLY FOR COMMANDS
             `CREATE TABLE IF NOT EXISTS messages (
                 message_id VARCHAR(20) PRIMARY KEY,
                 user_id VARCHAR(20) REFERENCES users(discord_id),
@@ -318,16 +318,20 @@ class Database {
     }
 
     // ==================== MESSAGE LOGGING METHODS ====================
+    // MODIFIED: Now only logs commands, not all messages
 
-    // Log message activity
+    // Log ONLY bot commands (messages starting with !)
     async logMessage(messageId, userId, channelId, content, commandUsed = null) {
         try {
-            await this.pool.query(
-                'INSERT INTO messages (message_id, user_id, channel_id, content, command_used) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (message_id) DO NOTHING',
-                [messageId, userId, channelId, content, commandUsed]
-            );
+            // Only log if it's a command (content starts with !)
+            if (content && content.startsWith('!')) {
+                await this.pool.query(
+                    'INSERT INTO messages (message_id, user_id, channel_id, content, command_used) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (message_id) DO NOTHING',
+                    [messageId, userId, channelId, content, commandUsed]
+                );
+            }
             
-            // Update user last activity
+            // Always update user last activity regardless of message type
             await this.pool.query(
                 'UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE discord_id = $1',
                 [userId]
@@ -338,12 +342,27 @@ class Database {
         }
     }
 
-    // Get user activity stats
+    // Update user activity without logging message content
+    async updateLastActivity(userId) {
+        try {
+            await this.pool.query(
+                'UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE discord_id = $1',
+                [userId]
+            );
+        } catch (error) {
+            console.error('Error updating last activity:', error);
+            throw error;
+        }
+    }
+
+    // Get user activity stats (now only shows command activity)
     async getUserActivity(userId, days = 7) {
         try {
             const result = await this.pool.query(
-                `SELECT COUNT(*) as message_count, 
-                        COUNT(CASE WHEN command_used IS NOT NULL THEN 1 END) as command_count
+                `SELECT COUNT(*) as command_count, 
+                        COUNT(CASE WHEN command_used LIKE '!shop%' THEN 1 END) as shop_commands,
+                        COUNT(CASE WHEN command_used LIKE '!admin%' THEN 1 END) as admin_commands,
+                        COUNT(CASE WHEN command_used LIKE '!message%' THEN 1 END) as message_commands
                  FROM messages 
                  WHERE user_id = $1 AND timestamp > NOW() - INTERVAL '${days} days'`,
                 [userId]
@@ -351,7 +370,12 @@ class Database {
             return result.rows[0];
         } catch (error) {
             console.error('Error getting user activity:', error);
-            throw error;
+            return {
+                command_count: 0,
+                shop_commands: 0,
+                admin_commands: 0,
+                message_commands: 0
+            };
         }
     }
 
