@@ -67,15 +67,34 @@ class ShopBot {
 
             console.log(`Started refreshing ${commands.length} application (/) commands.`);
 
-            // Register commands globally (takes up to 1 hour to appear)
-            const data = await rest.put(
-                Routes.applicationCommands(this.client.user.id),
-                { body: commands },
-            );
+            // Register commands to specific guild first (appears immediately)
+            if (process.env.GUILD_ID) {
+                try {
+                    const guildData = await rest.put(
+                        Routes.applicationGuildCommands(this.client.user.id, process.env.GUILD_ID),
+                        { body: commands },
+                    );
+                    console.log(`Successfully registered ${guildData.length} guild-specific commands (immediate).`);
+                } catch (guildError) {
+                    console.error('Error registering guild commands:', guildError);
+                }
+            } else {
+                console.log('GUILD_ID not set - skipping guild-specific registration');
+            }
 
-            console.log(`Successfully reloaded ${data.length} application (/) commands.`);
+            // Also register commands globally (takes up to 1 hour to appear everywhere)
+            try {
+                const globalData = await rest.put(
+                    Routes.applicationCommands(this.client.user.id),
+                    { body: commands },
+                );
+                console.log(`Successfully registered ${globalData.length} global commands (up to 1 hour delay).`);
+            } catch (globalError) {
+                console.error('Error registering global commands:', globalError);
+            }
+
         } catch (error) {
-            console.error('Error registering slash commands:', error);
+            console.error('Error in registerSlashCommands:', error);
         }
     }
 
