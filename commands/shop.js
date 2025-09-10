@@ -1,62 +1,82 @@
-// commands/shop.js
-const { EmbedBuilder } = require('discord.js');
+// commands/shop.js - Slash Command Version
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = {
-    name: 'shop',
-    description: 'Shop commands for transactions',
+    data: new SlashCommandBuilder()
+        .setName('shop')
+        .setDescription('Shop commands for transactions')
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('buy')
+                .setDescription('Create a new transaction')
+                .addStringOption(option =>
+                    option.setName('item')
+                        .setDescription('Name of the item to purchase')
+                        .setRequired(true))
+                .addNumberOption(option =>
+                    option.setName('price')
+                        .setDescription('Price per item')
+                        .setRequired(true)
+                        .setMinValue(0.01))
+                .addIntegerOption(option =>
+                    option.setName('quantity')
+                        .setDescription('Quantity to purchase')
+                        .setRequired(false)
+                        .setMinValue(1)))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('history')
+                .setDescription('View your transaction history'))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('status')
+                .setDescription('Check specific transaction status')
+                .addIntegerOption(option =>
+                    option.setName('transaction_id')
+                        .setDescription('Transaction ID to check')
+                        .setRequired(true))),
     
-    async execute(message, args, database) {
-        const subCommand = args[0];
+    async execute(interaction, database) {
+        const subcommand = interaction.options.getSubcommand();
         
-        switch (subCommand) {
+        switch (subcommand) {
             case 'buy':
-                await this.createTransaction(message, args, database);
+                await this.createTransaction(interaction, database);
                 break;
-                
             case 'history':
-                await this.showHistory(message, database);
+                await this.showHistory(interaction, database);
                 break;
-                
             case 'status':
-                await this.checkStatus(message, args, database);
+                await this.checkStatus(interaction, database);
                 break;
-                
-            default:
-                await this.showHelp(message);
         }
     },
 
-    async createTransaction(message, args, database) {
+    async createTransaction(interaction, database) {
         try {
-            // FIRST: Ensure user exists in database
-            await database.addUser(message.author.id, message.author.username, message.author.discriminator);
-            console.log(`User ${message.author.username} added/updated in database`);
+            // Ensure user exists in database
+            await database.addUser(interaction.user.id, interaction.user.username, interaction.user.discriminator);
+            console.log(`User ${interaction.user.username} added/updated in database`);
             
-            // THEN: Check if user is flagged as scammer
-            const userInfo = await database.getUserInfo(message.author.id);
+            // Check if user is flagged as scammer
+            const userInfo = await database.getUserInfo(interaction.user.id);
             if (userInfo?.is_scammer) {
-                return message.reply('❌ You are not allowed to make transactions. Contact an administrator if you believe this is an error.');
+                return await interaction.reply({ 
+                    content: '❌ You are not allowed to make transactions. Contact an administrator if you believe this is an error.',
+                    ephemeral: true 
+                });
             }
             
-            const itemName = args[1];
-            const quantity = parseInt(args[2]) || 1;
-            const unitPrice = parseFloat(args[3]);
-            
-            if (!itemName || !unitPrice || isNaN(unitPrice)) {
-                return message.reply('Usage: `!shop buy <item> [quantity] <price>`\nExample: `!shop buy DragonSword 1 25.99`');
-            }
-            
-            if (quantity <= 0 || unitPrice <= 0) {
-                return message.reply('❌ Quantity and price must be positive numbers!');
-            }
+            const itemName = interaction.options.getString('item');
+            const unitPrice = interaction.options.getNumber('price');
+            const quantity = interaction.options.getInteger('quantity') || 1;
             
             const totalAmount = quantity * unitPrice;
             
-            console.log(`Creating transaction for user ${message.author.id}: ${itemName} x${quantity} @ $${unitPrice}`);
+            console.log(`Creating transaction for user ${interaction.user.id}: ${itemName} x${quantity} @ $${unitPrice}`);
             
-            // Create transaction (user definitely exists now)
             const transactionId = await database.addTransaction(
-                message.author.id,
+                interaction.user.id,
                 itemName,
                 quantity,
                 unitPrice,
@@ -72,30 +92,36 @@ module.exports = {
                     { name: 'Unit Price', value: `$${unitPrice.toFixed(2)}`, inline: true },
                     { name: 'Total Amount', value: `$${totalAmount.toFixed(2)}`, inline: true },
                     { name: 'Status', value: '⏳ Pending', inline: true },
-                    { name: 'Buyer', value: `<@${message.author.id}>`, inline: true }
+                    { name: 'Buyer', value: `<@${interaction.user.id}>`, inline: true }
                 )
                 .setColor('#00FF00')
                 .setFooter({ text: 'Please wait for admin confirmation' })
                 .setTimestamp();
                 
-            await message.reply({ embeds: [embed] });
+            await interaction.reply({ embeds: [embed] });
             console.log(`Transaction ${transactionId} created successfully`);
             
         } catch (error) {
             console.error('Error in createTransaction:', error);
-            await message.reply('❌ An error occurred while creating the transaction. Please try again or contact an administrator.');
+            await interaction.reply({ 
+                content: '❌ An error occurred while creating the transaction. Please try again or contact an administrator.',
+                ephemeral: true 
+            });
         }
     },
 
-    async showHistory(message, database) {
+    async showHistory(interaction, database) {
         try {
             // Ensure user exists
-            await database.addUser(message.author.id, message.author.username, message.author.discriminator);
+            await database.addUser(interaction.user.id, interaction.user.username, interaction.user.discriminator);
             
-            const transactions = await database.getUserTransactions(message.author.id);
+            const transactions = await database.getUserTransactions(interaction.user.id);
             
             if (transactions.length === 0) {
-                return message.reply('📋 You have no transaction history.');
+                return await interaction.reply({ 
+                    content: '📋 You have no transaction history.',
+                    ephemeral: true 
+                });
             }
             
             const embed = new EmbedBuilder()
@@ -111,30 +137,32 @@ module.exports = {
                 embed.addFields({ name: 'Note', value: `You have ${transactions.length - 10} more transactions not shown.` });
             }
                 
-            await message.reply({ embeds: [embed] });
+            await interaction.reply({ embeds: [embed], ephemeral: true });
             
         } catch (error) {
             console.error('Error in showHistory:', error);
-            await message.reply('❌ An error occurred while fetching your transaction history.');
+            await interaction.reply({ 
+                content: '❌ An error occurred while fetching your transaction history.',
+                ephemeral: true 
+            });
         }
     },
 
-    async checkStatus(message, args, database) {
+    async checkStatus(interaction, database) {
         try {
-            const transactionId = parseInt(args[1]);
-            
-            if (!transactionId || isNaN(transactionId)) {
-                return message.reply('Usage: `!shop status <transaction_id>`\nExample: `!shop status 1`');
-            }
+            const transactionId = interaction.options.getInteger('transaction_id');
             
             // Ensure user exists
-            await database.addUser(message.author.id, message.author.username, message.author.discriminator);
+            await database.addUser(interaction.user.id, interaction.user.username, interaction.user.discriminator);
             
-            const transactions = await database.getUserTransactions(message.author.id);
+            const transactions = await database.getUserTransactions(interaction.user.id);
             const transaction = transactions.find(t => t.transaction_id === transactionId);
             
             if (!transaction) {
-                return message.reply('❌ Transaction not found or you don\'t have permission to view it.');
+                return await interaction.reply({ 
+                    content: '❌ Transaction not found or you don\'t have permission to view it.',
+                    ephemeral: true 
+                });
             }
             
             const embed = new EmbedBuilder()
@@ -151,11 +179,14 @@ module.exports = {
                 .setColor(this.getStatusColor(transaction.status))
                 .setTimestamp();
                 
-            await message.reply({ embeds: [embed] });
+            await interaction.reply({ embeds: [embed], ephemeral: true });
             
         } catch (error) {
             console.error('Error in checkStatus:', error);
-            await message.reply('❌ An error occurred while checking transaction status.');
+            await interaction.reply({ 
+                content: '❌ An error occurred while checking transaction status.',
+                ephemeral: true 
+            });
         }
     },
 
@@ -172,27 +203,12 @@ module.exports = {
 
     getStatusColor(status) {
         switch (status.toLowerCase()) {
-            case 'pending': return '#FFA500';  // Orange
-            case 'completed': return '#00FF00';  // Green
-            case 'failed': return '#FF0000';  // Red
-            case 'disputed': return '#FFFF00';  // Yellow
-            case 'cancelled': return '#808080';  // Gray
-            default: return '#0099FF';  // Blue
+            case 'pending': return '#FFA500';
+            case 'completed': return '#00FF00';
+            case 'failed': return '#FF0000';
+            case 'disputed': return '#FFFF00';
+            case 'cancelled': return '#808080';
+            default: return '#0099FF';
         }
-    },
-
-    async showHelp(message) {
-        const embed = new EmbedBuilder()
-            .setTitle('🛒 Shop Commands')
-            .setDescription('Available shop commands:')
-            .addFields(
-                { name: '`!shop buy <item> [quantity] <price>`', value: 'Create a new transaction\nExample: `!shop buy DragonSword 1 25.99`' },
-                { name: '`!shop history`', value: 'View your transaction history' },
-                { name: '`!shop status <transaction_id>`', value: 'Check specific transaction status\nExample: `!shop status 1`' }
-            )
-            .setColor('#0099FF')
-            .setFooter({ text: 'Need help? Contact an administrator!' });
-            
-        await message.reply({ embeds: [embed] });
     }
 };
