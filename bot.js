@@ -273,41 +273,127 @@ class ShopBot {
         }
     }
 
+    // Replace the startScheduledTasks() method in your bot.js file with this updated version
+
     startScheduledTasks() {
         console.log('Starting scheduled tasks...');
+        console.log('Current time:', new Date().toISOString());
+        console.log('Current time BST/GMT:', new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' }));
         
-        // Daily backup at 3 AM
-        cron.schedule('0 3 * * *', async () => {
-            console.log('Starting daily backup...');
+        // Daily backup at midnight BST/GMT (23:00 UTC during BST, 00:00 UTC during GMT)
+        // Using 00:00 UTC which is midnight GMT and 11 PM BST
+        cron.schedule('0 0 * * *', async () => {
+            console.log('=== AUTOMATED DAILY BACKUP STARTING ===');
+            console.log('UTC Time:', new Date().toISOString());
+            console.log('Local Time (BST/GMT):', new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' }));
+            
             try {
+                // Check if backup manager exists
+                if (!this.backupManager) {
+                    console.error('Backup manager not initialized!');
+                    return;
+                }
+                
                 await this.backupManager.performBackup();
-                console.log('Daily backup completed successfully');
+                console.log('=== DAILY BACKUP COMPLETED SUCCESSFULLY ===');
+                
+                // Send success notification to Discord
+                try {
+                    const backupChannelId = process.env.BACKUP_CHANNEL_ID;
+                    if (backupChannelId) {
+                        const channel = this.client.channels.cache.get(backupChannelId);
+                        if (channel) {
+                            const stats = await this.database.getDatabaseStats();
+                            await channel.send(`✅ **Daily backup completed successfully**\n` +
+                                             `Time: ${new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' })}\n` +
+                                             `Users: ${stats.users_count || 0} | Transactions: ${stats.transactions_count || 0} | Revenue: $${(stats.total_revenue || 0).toFixed(2)}`);
+                        }
+                    } else {
+                        console.log('No backup channel configured (BACKUP_CHANNEL_ID not set)');
+                    }
+                } catch (notifyError) {
+                    console.error('Failed to send backup success notification:', notifyError);
+                }
+                
             } catch (error) {
-                console.error('Daily backup failed:', error);
+                console.error('=== DAILY BACKUP FAILED ===', error);
+                
+                // Send failure notification to Discord
+                try {
+                    const backupChannelId = process.env.BACKUP_CHANNEL_ID;
+                    if (backupChannelId) {
+                        const channel = this.client.channels.cache.get(backupChannelId);
+                        if (channel) {
+                            await channel.send(`❌ **Automated backup failed**\n` +
+                                             `Time: ${new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' })}\n` +
+                                             `Error: ${error.message}`);
+                        }
+                    }
+                } catch (notifyError) {
+                    console.error('Failed to send backup failure notification:', notifyError);
+                }
             }
+        }, {
+            timezone: "UTC"
         });
-
+    
+        // Add a test backup every 5 minutes for debugging (remove this after confirming it works)
+        cron.schedule('*/5 * * * *', () => {
+            console.log('Cron is working - Current time:', new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' }));
+        }, {
+            timezone: "UTC"
+        });
+    
         // Check YouTube every 10 minutes
         cron.schedule('*/10 * * * *', async () => {
             try {
-                await this.youtubeMonitor.checkForNewVideos();
+                if (this.youtubeMonitor) {
+                    await this.youtubeMonitor.checkForNewVideos();
+                }
             } catch (error) {
                 console.error('YouTube monitoring error:', error);
             }
+        }, {
+            timezone: "UTC"
         });
-
+    
         // Check Twitch every 5 minutes
         cron.schedule('*/5 * * * *', async () => {
             try {
-                await this.twitchMonitor.checkForLiveStreams();
+                if (this.twitchMonitor) {
+                    await this.twitchMonitor.checkForLiveStreams();
+                }
             } catch (error) {
                 console.error('Twitch monitoring error:', error);
             }
+        }, {
+            timezone: "UTC"
         });
-
-        console.log('Scheduled tasks initialized');
+    
+        // Log that scheduled tasks are running
+        console.log('Scheduled tasks initialized:');
+        console.log('- Daily backup: Every day at midnight BST/GMT (00:00 UTC)');
+        console.log('- YouTube check: Every 10 minutes');
+        console.log('- Twitch check: Every 5 minutes'); 
+        console.log('- Debug cron: Every 5 minutes (remove after testing)');
+        
+        // Also add immediate backup test on startup (optional, remove if not needed)
+        console.log('Testing backup system in 30 seconds...');
+        setTimeout(async () => {
+            try {
+                console.log('=== STARTUP BACKUP TEST ===');
+                if (this.backupManager) {
+                    await this.backupManager.performBackup();
+                    console.log('Startup backup test successful');
+                } else {
+                    console.error('Backup manager not available for startup test');
+                }
+            } catch (error) {
+                console.error('Startup backup test failed:', error);
+            }
+        }, 30000); // 30 seconds after startup
     }
-
+    
     async start() {
         try {
             console.log('Starting Discord bot...');
