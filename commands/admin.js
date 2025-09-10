@@ -1,116 +1,240 @@
-// commands/admin.js - Complete Admin Commands File with All Features
-const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+// commands/admin.js - Slash Command Version
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 
 module.exports = {
-    name: 'admin',
-    description: 'Admin commands for bot management',
+    data: new SlashCommandBuilder()
+        .setName('admin')
+        .setDescription('Admin commands for bot management')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('syncmembers')
+                .setDescription('Add all Discord server members to database'))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('checkuser')
+                .setDescription('View detailed user info, transactions, and activity')
+                .addUserOption(option =>
+                    option.setName('user')
+                        .setDescription('User to check')
+                        .setRequired(true)))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('stats')
+                .setDescription('Show server statistics and database overview'))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('flagscammer')
+                .setDescription('Flag user as scammer with optional reason')
+                .addUserOption(option =>
+                    option.setName('user')
+                        .setDescription('User to flag as scammer')
+                        .setRequired(true))
+                .addStringOption(option =>
+                    option.setName('reason')
+                        .setDescription('Reason for flagging as scammer')
+                        .setRequired(false)))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('unflagscammer')
+                .setDescription('Remove scammer flag from user')
+                .addUserOption(option =>
+                    option.setName('user')
+                        .setDescription('User to unflag')
+                        .setRequired(true)))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('scammerlist')
+                .setDescription('Display all flagged scammers with notes'))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('updatetransaction')
+                .setDescription('Update transaction status')
+                .addIntegerOption(option =>
+                    option.setName('transaction_id')
+                        .setDescription('Transaction ID to update')
+                        .setRequired(true))
+                .addStringOption(option =>
+                    option.setName('status')
+                        .setDescription('New status for the transaction')
+                        .setRequired(true)
+                        .addChoices(
+                            { name: 'Pending', value: 'pending' },
+                            { name: 'Completed', value: 'completed' },
+                            { name: 'Failed', value: 'failed' },
+                            { name: 'Disputed', value: 'disputed' },
+                            { name: 'Cancelled', value: 'cancelled' }
+                        )))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('alltransactions')
+                .setDescription('View all recent transactions'))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('pendingtransactions')
+                .setDescription('View only pending transactions'))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('setwelcome')
+                .setDescription('Set welcome DM for new members')
+                .addStringOption(option =>
+                    option.setName('message')
+                        .setDescription('Welcome message to send to new members')
+                        .setRequired(true)))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('setpersistent')
+                .setDescription('Set message that always stays last in channel')
+                .addChannelOption(option =>
+                    option.setName('channel')
+                        .setDescription('Channel for persistent message')
+                        .setRequired(true))
+                .addStringOption(option =>
+                    option.setName('message')
+                        .setDescription('Message to keep persistent')
+                        .setRequired(true)))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('removepersistent')
+                .setDescription('Remove persistent message from channel')
+                .addChannelOption(option =>
+                    option.setName('channel')
+                        .setDescription('Channel to remove persistent message from')
+                        .setRequired(true)))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('addcreator')
+                .setDescription('Add creator for monitoring (YouTube/Twitch)')
+                .addStringOption(option =>
+                    option.setName('platform')
+                        .setDescription('Platform type')
+                        .setRequired(true)
+                        .addChoices(
+                            { name: 'YouTube', value: 'youtube' },
+                            { name: 'Twitch', value: 'twitch' }
+                        ))
+                .addStringOption(option =>
+                    option.setName('creator_id')
+                        .setDescription('Creator ID or username')
+                        .setRequired(true))
+                .addStringOption(option =>
+                    option.setName('creator_name')
+                        .setDescription('Display name for the creator')
+                        .setRequired(true))
+                .addChannelOption(option =>
+                    option.setName('channel')
+                        .setDescription('Discord channel to post notifications')
+                        .setRequired(true)))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('removecreator')
+                .setDescription('Stop monitoring a creator')
+                .addStringOption(option =>
+                    option.setName('platform')
+                        .setDescription('Platform type')
+                        .setRequired(true)
+                        .addChoices(
+                            { name: 'YouTube', value: 'youtube' },
+                            { name: 'Twitch', value: 'twitch' }
+                        ))
+                .addStringOption(option =>
+                    option.setName('creator_id')
+                        .setDescription('Creator ID or username')
+                        .setRequired(true)))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('listcreators')
+                .setDescription('Show all monitored creators'))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('backup')
+                .setDescription('Manually trigger database backup'))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('dbstats')
+                .setDescription('Show detailed database statistics'))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('testdb')
+                .setDescription('Test database connection'))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('cleanup')
+                .setDescription('Clean old messages/data (30+ days)')),
     
-    async execute(message, args, database) {
-        // Check if user has admin permissions
-        if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
-            return message.reply('You need administrator permissions to use this command!');
-        }
-
-        const subCommand = args[0];
+    async execute(interaction, database) {
+        const subcommand = interaction.options.getSubcommand();
         
-        switch (subCommand) {
-            // User Management
+        switch (subcommand) {
             case 'syncmembers':
-                await this.syncAllMembers(message, database);
+                await this.syncAllMembers(interaction, database);
                 break;
-                
             case 'checkuser':
-                await this.checkUser(message, args, database);
+                await this.checkUser(interaction, database);
                 break;
-                
             case 'stats':
-                await this.showStats(message, database);
+                await this.showStats(interaction, database);
                 break;
-
-            // Scammer Management
             case 'flagscammer':
-                await this.flagScammer(message, args, database);
+                await this.flagScammer(interaction, database);
                 break;
-                
             case 'unflagscammer':
-                await this.unflagScammer(message, args, database);
+                await this.unflagScammer(interaction, database);
                 break;
-                
             case 'scammerlist':
-                await this.listScammers(message, database);
+                await this.listScammers(interaction, database);
                 break;
-
-            // Transaction Management
             case 'updatetransaction':
-                await this.updateTransaction(message, args, database);
+                await this.updateTransaction(interaction, database);
                 break;
-
             case 'alltransactions':
-                await this.showAllTransactions(message, database);
+                await this.showAllTransactions(interaction, database);
                 break;
-
             case 'pendingtransactions':
-                await this.showPendingTransactions(message, database);
+                await this.showPendingTransactions(interaction, database);
                 break;
-
-            // Bot Configuration
             case 'setwelcome':
-                await this.setWelcomeMessage(message, args.slice(1).join(' '), database);
+                await this.setWelcomeMessage(interaction, database);
                 break;
-                
             case 'setpersistent':
-                await this.setPersistentMessage(message, args, database);
+                await this.setPersistentMessage(interaction, database);
                 break;
-
             case 'removepersistent':
-                await this.removePersistentChannel(message, args, database);
+                await this.removePersistentChannel(interaction, database);
                 break;
-
-            // Content Monitoring
             case 'addcreator':
-                await this.addCreator(message, args, database);
+                await this.addCreator(interaction, database);
                 break;
-                
             case 'removecreator':
-                await this.removeCreator(message, args, database);
+                await this.removeCreator(interaction, database);
                 break;
-
             case 'listcreators':
-                await this.listCreators(message, database);
+                await this.listCreators(interaction, database);
                 break;
-
-            // Database & Backup
             case 'backup':
-                await this.manualBackup(message, database);
+                await this.manualBackup(interaction, database);
                 break;
-
             case 'dbstats':
-                await this.showDatabaseStats(message, database);
+                await this.showDatabaseStats(interaction, database);
                 break;
-
             case 'testdb':
-                await this.testDatabase(message, database);
+                await this.testDatabase(interaction, database);
                 break;
-
             case 'cleanup':
-                await this.cleanupOldData(message, database);
+                await this.cleanupOldData(interaction, database);
                 break;
-                
-            default:
-                await this.showHelp(message);
         }
     },
 
     // ==================== USER MANAGEMENT ====================
 
-    async syncAllMembers(message, database) {
+    async syncAllMembers(interaction, database) {
         try {
-            const guild = message.guild;
-            const statusMessage = await message.reply('🔄 Starting member sync... This may take a moment.');
-
-            // Fetch all members (this gets members from cache and API)
+            await interaction.deferReply(); // This can take time
+            
+            const guild = interaction.guild;
             const members = await guild.members.fetch();
             
             let addedCount = 0;
@@ -121,7 +245,6 @@ module.exports = {
             const totalMembers = members.size;
             console.log(`Starting sync of ${totalMembers} members...`);
 
-            // Process members in batches to avoid overwhelming the database
             const memberArray = Array.from(members.values());
             const batchSize = 50;
 
@@ -130,91 +253,102 @@ module.exports = {
                 
                 await Promise.all(batch.map(async (member) => {
                     try {
-                        // Skip bots
                         if (member.user.bot) {
                             skippedCount++;
                             return;
                         }
 
-                        // Check if user already exists
                         const existingUser = await database.getUserInfo(member.user.id);
                         
                         if (existingUser) {
-                            // Update existing user info (username might have changed)
                             await database.updateUserInfo(member.user.id, member.user.username, member.user.discriminator);
                             updatedCount++;
-                            console.log(`Updated user: ${member.user.username}`);
                         } else {
-                            // Add new user
                             await database.addUser(member.user.id, member.user.username, member.user.discriminator);
                             addedCount++;
-                            console.log(`Added new user: ${member.user.username}`);
                         }
+                        console.error('Error testing database:', error);
+            await interaction.reply('❌ Database test failed.');
+        }
+    },
 
-                    } catch (error) {
+    async cleanupOldData(interaction, database) {
+        try {
+            await interaction.deferReply();
+            
+            const messagesResult = await database.pool.query(
+                "DELETE FROM messages WHERE timestamp < NOW() - INTERVAL '30 days'"
+            );
+            
+            const deletedMessages = messagesResult.rowCount;
+
+            await interaction.editReply(`✅ Cleanup completed! Removed ${deletedMessages} old messages (30+ days old).`);
+            console.log(`Data cleanup: removed ${deletedMessages} old messages`);
+
+        } catch (error) {
+            console.error('Error during cleanup:', error);
+            await interaction.editReply('❌ Error during cleanup.');
+        }
+    }
+};
                         console.error(`Error processing member ${member.user.username}:`, error);
                         errorCount++;
                     }
                 }));
 
-                // Update progress
                 const processed = Math.min(i + batchSize, memberArray.length);
                 const progressPercent = Math.round((processed / totalMembers) * 100);
                 
-                if (i % 100 === 0 || processed === totalMembers) { // Update every 100 members or at the end
+                if (i % 100 === 0 || processed === totalMembers) {
                     try {
-                        await statusMessage.edit(`🔄 Syncing members... ${processed}/${totalMembers} (${progressPercent}%)`);
+                        await interaction.editReply(`🔄 Syncing members... ${processed}/${totalMembers} (${progressPercent}%)`);
                     } catch (editError) {
-                        console.log('Could not edit status message:', editError.message);
+                        console.log('Could not edit status:', editError.message);
                     }
                 }
             }
 
-            // Final results
             const embed = new EmbedBuilder()
                 .setTitle('✅ Member Sync Complete!')
                 .setDescription('All Discord members have been synchronized with the database.')
                 .addFields(
-                    { name: '📊 Summary', value: '\u200B', inline: false },
                     { name: 'Total Members Processed', value: totalMembers.toString(), inline: true },
                     { name: 'New Users Added', value: addedCount.toString(), inline: true },
                     { name: 'Existing Users Updated', value: updatedCount.toString(), inline: true },
                     { name: 'Bots Skipped', value: skippedCount.toString(), inline: true },
-                    { name: 'Errors', value: errorCount.toString(), inline: true },
-                    { name: '\u200B', value: '\u200B', inline: true }
+                    { name: 'Errors', value: errorCount.toString(), inline: true }
                 )
                 .setColor('#00FF00')
-                .setTimestamp()
-                .setFooter({ text: 'All members are now in the database!' });
+                .setTimestamp();
 
-            await statusMessage.edit({ content: '', embeds: [embed] });
-            console.log(`Member sync completed: ${addedCount} added, ${updatedCount} updated, ${skippedCount} skipped, ${errorCount} errors`);
+            await interaction.editReply({ content: '', embeds: [embed] });
 
         } catch (error) {
             console.error('Error in syncAllMembers:', error);
-            await message.reply('❌ An error occurred during member sync. Check the logs for details.');
+            const errorMessage = 'An error occurred during member sync. Check the logs for details.';
+            if (interaction.deferred) {
+                await interaction.editReply(errorMessage);
+            } else {
+                await interaction.reply(errorMessage);
+            }
         }
     },
 
-    async checkUser(message, args, database) {
-        const userId = args[1]?.replace(/[<@!>]/g, '');
-        
-        if (!userId) {
-            return message.reply('Please mention a user to check!\nExample: `!admin checkuser @username`');
-        }
+    async checkUser(interaction, database) {
+        const user = interaction.options.getUser('user');
         
         try {
-            const userInfo = await database.getUserInfo(userId);
-            const transactions = await database.getUserTransactions(userId);
-            const activity = await database.getUserActivity(userId);
+            const userInfo = await database.getUserInfo(user.id);
+            const transactions = await database.getUserTransactions(user.id);
+            const activity = await database.getUserActivity(user.id);
             
             if (!userInfo) {
-                return message.reply('❌ User not found in database! Try syncing members first with `!admin syncmembers`');
+                return await interaction.reply('❌ User not found in database! Try syncing members first with `/admin syncmembers`');
             }
             
             const embed = new EmbedBuilder()
                 .setTitle('👤 User Information')
-                .setDescription(`<@${userId}>`)
+                .setDescription(`<@${user.id}>`)
                 .addFields(
                     { name: 'Username', value: userInfo.username, inline: true },
                     { name: 'Join Date', value: userInfo.join_date?.toLocaleDateString() || 'Unknown', inline: true },
@@ -222,7 +356,7 @@ module.exports = {
                     { name: 'Total Purchases', value: userInfo.total_purchases.toString(), inline: true },
                     { name: 'Total Spent', value: `$${parseFloat(userInfo.total_spent).toFixed(2)}`, inline: true },
                     { name: 'Is Scammer', value: userInfo.is_scammer ? '⚠️ YES' : '✅ No', inline: true },
-                    { name: 'Recent Activity (7 days)', value: `${activity?.message_count || 0} messages\n${activity?.command_count || 0} commands`, inline: true },
+                    { name: 'Recent Activity (7 days)', value: `${activity?.command_count || 0} commands`, inline: true },
                     { name: 'Recent Transactions', value: transactions.slice(0, 5).map(t => `${t.item_name} - $${parseFloat(t.total_amount).toFixed(2)} (${t.status})`).join('\n') || 'None', inline: false }
                 )
                 .setColor(userInfo.is_scammer ? '#FF0000' : '#00FF00')
@@ -232,18 +366,18 @@ module.exports = {
                 embed.addFields({ name: 'Scammer Notes', value: userInfo.scammer_notes, inline: false });
             }
             
-            await message.reply({ embeds: [embed] });
+            await interaction.reply({ embeds: [embed] });
             
         } catch (error) {
             console.error('Error checking user:', error);
-            await message.reply('❌ Error retrieving user information.');
+            await interaction.reply('❌ Error retrieving user information.');
         }
     },
 
-    async showStats(message, database) {
+    async showStats(interaction, database) {
         try {
             const totalUsers = await database.getTotalUserCount();
-            const activeUsers = await database.getUserCount(); // Non-scammers
+            const activeUsers = await database.getUserCount();
             const scammers = await database.getAllScammers();
             const recentUsers = await database.getRecentUsers(5);
             const stats = await database.getDatabaseStats();
@@ -262,66 +396,56 @@ module.exports = {
                 .setColor('#0099FF')
                 .setTimestamp();
 
-            await message.reply({ embeds: [embed] });
+            await interaction.reply({ embeds: [embed] });
         } catch (error) {
             console.error('Error showing stats:', error);
-            await message.reply('❌ Error retrieving statistics.');
+            await interaction.reply('❌ Error retrieving statistics.');
         }
     },
 
-    // ==================== SCAMMER MANAGEMENT ====================
-
-    async flagScammer(message, args, database) {
-        const userId = args[1]?.replace(/[<@!>]/g, '');
-        const reason = args.slice(2).join(' ');
-        
-        if (!userId) {
-            return message.reply('Please mention a user to flag!\nExample: `!admin flagscammer @user They tried to scam people`');
-        }
+    async flagScammer(interaction, database) {
+        const user = interaction.options.getUser('user');
+        const reason = interaction.options.getString('reason') || 'No reason provided';
         
         try {
-            await database.flagUserAsScammer(userId, reason);
+            await database.flagUserAsScammer(user.id, reason);
             const embed = new EmbedBuilder()
                 .setTitle('🚨 User Flagged as Scammer')
                 .addFields(
-                    { name: 'User', value: `<@${userId}>`, inline: true },
-                    { name: 'Reason', value: reason || 'No reason provided', inline: false },
-                    { name: 'Flagged by', value: message.author.username, inline: true }
+                    { name: 'User', value: `<@${user.id}>`, inline: true },
+                    { name: 'Reason', value: reason, inline: false },
+                    { name: 'Flagged by', value: interaction.user.username, inline: true }
                 )
                 .setColor('#FF0000')
                 .setTimestamp();
             
-            await message.reply({ embeds: [embed] });
-            console.log(`User ${userId} flagged as scammer by ${message.author.username}: ${reason}`);
+            await interaction.reply({ embeds: [embed] });
+            console.log(`User ${user.id} flagged as scammer by ${interaction.user.username}: ${reason}`);
         } catch (error) {
             console.error('Error flagging scammer:', error);
-            await message.reply('❌ Error flagging user as scammer.');
+            await interaction.reply('❌ Error flagging user as scammer.');
         }
     },
 
-    async unflagScammer(message, args, database) {
-        const userId = args[1]?.replace(/[<@!>]/g, '');
-        
-        if (!userId) {
-            return message.reply('Please mention a user to unflag!\nExample: `!admin unflagscammer @user`');
-        }
+    async unflagScammer(interaction, database) {
+        const user = interaction.options.getUser('user');
         
         try {
-            await database.unflagUserAsScammer(userId);
-            await message.reply(`✅ User <@${userId}> has been unflagged successfully!`);
-            console.log(`User ${userId} unflagged by ${message.author.username}`);
+            await database.unflagUserAsScammer(user.id);
+            await interaction.reply(`✅ User <@${user.id}> has been unflagged successfully!`);
+            console.log(`User ${user.id} unflagged by ${interaction.user.username}`);
         } catch (error) {
             console.error('Error unflagging scammer:', error);
-            await message.reply('❌ Error unflagging user.');
+            await interaction.reply('❌ Error unflagging user.');
         }
     },
 
-    async listScammers(message, database) {
+    async listScammers(interaction, database) {
         try {
             const scammers = await database.getAllScammers();
             
             if (scammers.length === 0) {
-                return message.reply('✅ No flagged scammers found!');
+                return await interaction.reply('✅ No flagged scammers found!');
             }
             
             const embed = new EmbedBuilder()
@@ -333,33 +457,21 @@ module.exports = {
                 .setFooter({ text: `${scammers.length} flagged scammers` })
                 .setTimestamp();
                 
-            await message.reply({ embeds: [embed] });
+            await interaction.reply({ embeds: [embed] });
         } catch (error) {
             console.error('Error listing scammers:', error);
-            await message.reply('❌ Error retrieving scammers list.');
+            await interaction.reply('❌ Error retrieving scammers list.');
         }
     },
 
-    // ==================== TRANSACTION MANAGEMENT ====================
-
-    async updateTransaction(message, args, database) {
+    async updateTransaction(interaction, database) {
         try {
-            const transactionId = parseInt(args[1]);
-            const newStatus = args[2]?.toLowerCase();
-            
-            if (!transactionId || !newStatus) {
-                return message.reply('Usage: `!admin updatetransaction <transaction_id> <status>`\nStatus options: pending, completed, failed, disputed, cancelled\nExample: `!admin updatetransaction 1 completed`');
-            }
+            const transactionId = interaction.options.getInteger('transaction_id');
+            const newStatus = interaction.options.getString('status');
 
-            const validStatuses = ['pending', 'completed', 'failed', 'disputed', 'cancelled'];
-            if (!validStatuses.includes(newStatus)) {
-                return message.reply(`❌ Invalid status. Valid options: ${validStatuses.join(', ')}`);
-            }
-
-            // Check if transaction exists
             const transaction = await database.getTransactionById(transactionId);
             if (!transaction) {
-                return message.reply('❌ Transaction not found!');
+                return await interaction.reply('❌ Transaction not found!');
             }
 
             await database.updateTransactionStatus(transactionId, newStatus);
@@ -377,21 +489,20 @@ module.exports = {
                 .setColor('#00FF00')
                 .setTimestamp();
 
-            await message.reply({ embeds: [embed] });
-            console.log(`Transaction ${transactionId} updated to ${newStatus} by ${message.author.username}`);
+            await interaction.reply({ embeds: [embed] });
 
         } catch (error) {
             console.error('Error updating transaction:', error);
-            await message.reply('❌ Error updating transaction. Check the logs for details.');
+            await interaction.reply('❌ Error updating transaction.');
         }
     },
 
-    async showAllTransactions(message, database) {
+    async showAllTransactions(interaction, database) {
         try {
             const transactions = await database.getAllTransactions(20);
             
             if (transactions.length === 0) {
-                return message.reply('📋 No transactions found.');
+                return await interaction.reply('📋 No transactions found.');
             }
 
             const embed = new EmbedBuilder()
@@ -404,21 +515,21 @@ module.exports = {
                 .setFooter({ text: `Showing last ${transactions.length} transactions` })
                 .setTimestamp();
 
-            await message.reply({ embeds: [embed] });
+            await interaction.reply({ embeds: [embed] });
 
         } catch (error) {
             console.error('Error showing all transactions:', error);
-            await message.reply('❌ Error retrieving transactions.');
+            await interaction.reply('❌ Error retrieving transactions.');
         }
     },
 
-    async showPendingTransactions(message, database) {
+    async showPendingTransactions(interaction, database) {
         try {
             const allTransactions = await database.getAllTransactions(100);
             const pendingTransactions = allTransactions.filter(t => t.status === 'pending');
             
             if (pendingTransactions.length === 0) {
-                return message.reply('✅ No pending transactions!');
+                return await interaction.reply('✅ No pending transactions!');
             }
 
             const embed = new EmbedBuilder()
@@ -432,116 +543,88 @@ module.exports = {
                 .setFooter({ text: `${pendingTransactions.length} pending transactions` })
                 .setTimestamp();
 
-            await message.reply({ embeds: [embed] });
+            await interaction.reply({ embeds: [embed] });
 
         } catch (error) {
             console.error('Error showing pending transactions:', error);
-            await message.reply('❌ Error retrieving pending transactions.');
+            await interaction.reply('❌ Error retrieving pending transactions.');
         }
     },
 
-    // ==================== BOT CONFIGURATION ====================
-
-    async setWelcomeMessage(message, newMessage, database) {
-        if (!newMessage) {
-            return message.reply('Please provide a welcome message!\nExample: `!admin setwelcome Welcome to our server! Please read the rules.`');
-        }
+    async setWelcomeMessage(interaction, database) {
+        const message = interaction.options.getString('message');
         
         try {
-            await database.setWelcomeMessage(newMessage);
+            await database.setWelcomeMessage(message);
             
             const embed = new EmbedBuilder()
                 .setTitle('✅ Welcome Message Updated')
                 .setDescription('New welcome message:')
-                .addFields({ name: 'Message', value: newMessage })
+                .addFields({ name: 'Message', value: message })
                 .setColor('#00FF00')
                 .setTimestamp();
             
-            await message.reply({ embeds: [embed] });
+            await interaction.reply({ embeds: [embed] });
         } catch (error) {
             console.error('Error setting welcome message:', error);
-            await message.reply('❌ Error updating welcome message.');
+            await interaction.reply('❌ Error updating welcome message.');
         }
     },
 
-    async setPersistentMessage(message, args, database) {
-        const channelId = args[1]?.replace(/[<#>]/g, '');
-        const persistentMessage = args.slice(2).join(' ');
-        
-        if (!channelId || !persistentMessage) {
-            return message.reply('Usage: `!admin setpersistent #channel Your message here`\nExample: `!admin setpersistent #general Server rules: No spam, be respectful!`');
-        }
+    async setPersistentMessage(interaction, database) {
+        const channel = interaction.options.getChannel('channel');
+        const message = interaction.options.getString('message');
         
         try {
-            await database.setPersistentChannel(channelId, persistentMessage);
-            await message.reply(`✅ Persistent message set for <#${channelId}>!`);
+            await database.setPersistentChannel(channel.id, message);
+            await interaction.reply(`✅ Persistent message set for <#${channel.id}>!`);
         } catch (error) {
             console.error('Error setting persistent message:', error);
-            await message.reply('❌ Error setting persistent message.');
+            await interaction.reply('❌ Error setting persistent message.');
         }
     },
 
-    async removePersistentChannel(message, args, database) {
+    async removePersistentChannel(interaction, database) {
+        const channel = interaction.options.getChannel('channel');
+        
         try {
-            const channelId = args[1]?.replace(/[<#>]/g, '');
-            
-            if (!channelId) {
-                return message.reply('Usage: `!admin removepersistent #channel`');
-            }
-
-            await database.removePersistentChannel(channelId);
-            await message.reply(`✅ Persistent message removed from <#${channelId}>!`);
-
+            await database.removePersistentChannel(channel.id);
+            await interaction.reply(`✅ Persistent message removed from <#${channel.id}>!`);
         } catch (error) {
             console.error('Error removing persistent channel:', error);
-            await message.reply('❌ Error removing persistent message.');
+            await interaction.reply('❌ Error removing persistent message.');
         }
     },
 
-    // ==================== CONTENT MONITORING ====================
-
-    async addCreator(message, args, database) {
-        // Usage: !admin addcreator youtube channelId channelName #discord-channel
-        const platform = args[1]?.toLowerCase();
-        const creatorId = args[2];
-        const creatorName = args[3];
-        const discordChannelId = args[4]?.replace(/[<#>]/g, '');
-        
-        if (!platform || !creatorId || !creatorName || !discordChannelId) {
-            return message.reply('Usage: `!admin addcreator <platform> <creator_id> <creator_name> #channel`\nPlatforms: youtube, twitch\nExample: `!admin addcreator youtube UCChannelID CreatorName #updates`');
-        }
-
-        if (!['youtube', 'twitch'].includes(platform)) {
-            return message.reply('❌ Invalid platform. Use: youtube or twitch');
-        }
+    async addCreator(interaction, database) {
+        const platform = interaction.options.getString('platform');
+        const creatorId = interaction.options.getString('creator_id');
+        const creatorName = interaction.options.getString('creator_name');
+        const channel = interaction.options.getChannel('channel');
         
         try {
-            await database.addCreator(platform, creatorId, creatorName, discordChannelId);
-            await message.reply(`✅ Added ${platform} creator: **${creatorName}** → <#${discordChannelId}>`);
+            await database.addCreator(platform, creatorId, creatorName, channel.id);
+            await interaction.reply(`✅ Added ${platform} creator: **${creatorName}** → <#${channel.id}>`);
         } catch (error) {
             console.error('Error adding creator:', error);
-            await message.reply('❌ Error adding creator.');
+            await interaction.reply('❌ Error adding creator.');
         }
     },
 
-    async removeCreator(message, args, database) {
-        const platform = args[1]?.toLowerCase();
-        const creatorId = args[2];
-        
-        if (!platform || !creatorId) {
-            return message.reply('Usage: `!admin removecreator <platform> <creator_id>`\nExample: `!admin removecreator youtube UCChannelID`');
-        }
+    async removeCreator(interaction, database) {
+        const platform = interaction.options.getString('platform');
+        const creatorId = interaction.options.getString('creator_id');
         
         try {
             await database.removeCreator(platform, creatorId);
-            await message.reply(`✅ Removed ${platform} creator: **${creatorId}**`);
+            await interaction.reply(`✅ Removed ${platform} creator: **${creatorId}**`);
         } catch (error) {
             console.error('Error removing creator:', error);
-            await message.reply('❌ Error removing creator.');
+            await interaction.reply('❌ Error removing creator.');
         }
     },
 
-    async listCreators(message, database) {
+    async listCreators(interaction, database) {
         try {
             const youtubeCreators = await database.getCreators('youtube');
             const twitchCreators = await database.getCreators('twitch');
@@ -571,63 +654,58 @@ module.exports = {
             }
 
             if (youtubeCreators.length === 0 && twitchCreators.length === 0) {
-                embed.setDescription('No creators are currently being monitored.\nUse `!admin addcreator` to add some!');
+                embed.setDescription('No creators are currently being monitored.');
             }
 
-            await message.reply({ embeds: [embed] });
+            await interaction.reply({ embeds: [embed] });
 
         } catch (error) {
             console.error('Error listing creators:', error);
-            await message.reply('❌ Error retrieving creators list.');
+            await interaction.reply('❌ Error retrieving creators list.');
         }
     },
 
-    // ==================== DATABASE & BACKUP ====================
-
-    async manualBackup(message, database) {
+    async manualBackup(interaction, database) {
         try {
-            const statusMessage = await message.reply('🔄 Starting manual backup...');
+            await interaction.deferReply();
             
-            // Get backup data
             const backupData = await database.getBackupData();
             backupData.timestamp = new Date().toISOString();
-            backupData.triggered_by = message.author.username;
+            backupData.triggered_by = interaction.user.username;
             backupData.type = 'manual';
 
             const backupJson = JSON.stringify(backupData, null, 2);
             
-            // If backup channel is configured, send it there
             const backupChannelId = process.env.BACKUP_CHANNEL_ID;
             if (backupChannelId) {
-                const backupChannel = message.guild.channels.cache.get(backupChannelId);
+                const backupChannel = interaction.guild.channels.cache.get(backupChannelId);
                 if (backupChannel) {
-                    // Create a text file with backup data
                     const filename = `manual_backup_${Date.now()}.json`;
                     const filepath = path.join('/tmp', filename);
                     
                     fs.writeFileSync(filepath, backupJson);
                     
                     await backupChannel.send({
-                        content: `📁 Manual Backup triggered by ${message.author.username}`,
+                        content: `📁 Manual Backup triggered by ${interaction.user.username}`,
                         files: [{ attachment: filepath, name: filename }]
                     });
 
-                    fs.unlinkSync(filepath); // Clean up temp file
-                    await statusMessage.edit('✅ Manual backup completed and sent to backup channel!');
+                    fs.unlinkSync(filepath);
+                    await interaction.editReply('✅ Manual backup completed and sent to backup channel!');
                 } else {
-                    await statusMessage.edit('✅ Manual backup completed! (Backup channel not found)');
+                    await interaction.editReply('✅ Manual backup completed! (Backup channel not found)');
                 }
             } else {
-                await statusMessage.edit('✅ Manual backup completed! (No backup channel configured)');
+                await interaction.editReply('✅ Manual backup completed! (No backup channel configured)');
             }
 
         } catch (error) {
             console.error('Error creating manual backup:', error);
-            await message.reply('❌ Error creating backup. Check the logs for details.');
+            await interaction.editReply('❌ Error creating backup.');
         }
     },
 
-    async showDatabaseStats(message, database) {
+    async showDatabaseStats(interaction, database) {
         try {
             const stats = await database.getDatabaseStats();
             
@@ -642,18 +720,17 @@ module.exports = {
                     { name: '💵 Total Revenue', value: `$${(stats.total_revenue || 0).toFixed(2)}`, inline: true }
                 )
                 .setColor('#00FF99')
-                .setTimestamp()
-                .setFooter({ text: 'Database statistics updated in real-time' });
+                .setTimestamp();
 
-            await message.reply({ embeds: [embed] });
+            await interaction.reply({ embeds: [embed] });
 
         } catch (error) {
             console.error('Error showing database stats:', error);
-            await message.reply('❌ Error retrieving database statistics.');
+            await interaction.reply('❌ Error retrieving database statistics.');
         }
     },
 
-    async testDatabase(message, database) {
+    async testDatabase(interaction, database) {
         try {
             const startTime = Date.now();
             const isConnected = await database.testConnection();
@@ -669,255 +746,6 @@ module.exports = {
                 .setColor(isConnected ? '#00FF00' : '#FF0000')
                 .setTimestamp();
 
-            await message.reply({ embeds: [embed] });
+            await interaction.reply({ embeds: [embed] });
 
         } catch (error) {
-            console.error('Error testing database:', error);
-            await message.reply('❌ Database test failed. Check the logs for details.');
-        }
-    },
-
-    async cleanupOldData(message, database) {
-        try {
-            const statusMessage = await message.reply('🧹 Starting data cleanup...');
-            
-            // Clean messages older than 30 days
-            const messagesResult = await database.pool.query(
-                "DELETE FROM messages WHERE timestamp < NOW() - INTERVAL '30 days'"
-            );
-            
-            const deletedMessages = messagesResult.rowCount;
-
-            await statusMessage.edit(`✅ Cleanup completed! Removed ${deletedMessages} old messages (30+ days old).`);
-            console.log(`Data cleanup: removed ${deletedMessages} old messages`);
-
-        } catch (error) {
-            console.error('Error during cleanup:', error);
-            await message.reply('❌ Error during cleanup. Check the logs for details.');
-        }
-    },
-
-    // ==================== HELP COMMAND ====================
-
-    async showHelp(message) {
-        const embed = new EmbedBuilder()
-            .setTitle('🔧 Complete Admin Commands Guide')
-            .setDescription('All available admin commands with exact syntax:')
-            .addFields(
-                // User Management Section
-                { 
-                    name: '👥 **USER MANAGEMENT**', 
-                    value: '```' +
-                    '!admin syncmembers\n' +
-                    '!admin checkuser @username\n' +
-                    '!admin stats\n' +
-                    '```', 
-                    inline: false 
-                },
-                { 
-                    name: '📝 User Management Explanations', 
-                    value: 
-                    '**`!admin syncmembers`** - Add all Discord server members to database\n' +
-                    '**`!admin checkuser @username`** - View detailed user info, transactions, and activity\n' +
-                    '**`!admin stats`** - Show server statistics and database overview\n',
-                    inline: false 
-                },
-
-                // Scammer Management Section
-                { 
-                    name: '🚨 **SCAMMER MANAGEMENT**', 
-                    value: '```' +
-                    '!admin flagscammer @username reason here\n' +
-                    '!admin unflagscammer @username\n' +
-                    '!admin scammerlist\n' +
-                    '```', 
-                    inline: false 
-                },
-                { 
-                    name: '📝 Scammer Management Explanations', 
-                    value: 
-                    '**`!admin flagscammer @user reason`** - Flag user as scammer with optional reason\n' +
-                    '**`!admin unflagscammer @user`** - Remove scammer flag from user\n' +
-                    '**`!admin scammerlist`** - Display all flagged scammers with notes\n',
-                    inline: false 
-                },
-
-                // Transaction Management Section
-                { 
-                    name: '💰 **TRANSACTION MANAGEMENT**', 
-                    value: '```' +
-                    '!admin updatetransaction 1 completed\n' +
-                    '!admin updatetransaction 2 failed\n' +
-                    '!admin alltransactions\n' +
-                    '!admin pendingtransactions\n' +
-                    '```', 
-                    inline: false 
-                },
-                { 
-                    name: '📝 Transaction Management Explanations', 
-                    value: 
-                    '**`!admin updatetransaction <ID> <status>`** - Update transaction status\n' +
-                    '   • Status options: pending, completed, failed, disputed, cancelled\n' +
-                    '**`!admin alltransactions`** - View all recent transactions\n' +
-                    '**`!admin pendingtransactions`** - View only pending transactions\n',
-                    inline: false 
-                },
-
-                // Bot Configuration Section
-                { 
-                    name: '⚙️ **BOT CONFIGURATION**', 
-                    value: '```' +
-                    '!admin setwelcome Your welcome message here\n' +
-                    '!admin setpersistent #channel Your message\n' +
-                    '!admin removepersistent #channel\n' +
-                    '```', 
-                    inline: false 
-                },
-                { 
-                    name: '📝 Bot Configuration Explanations', 
-                    value: 
-                    '**`!admin setwelcome <message>`** - Set welcome DM for new members\n' +
-                    '**`!admin setpersistent #channel <msg>`** - Message always stays last in channel\n' +
-                    '**`!admin removepersistent #channel`** - Remove persistent message\n',
-                    inline: false 
-                },
-
-                // MESSAGE COMMANDS SECTION (NEW DETAILED SECTION)
-                { 
-                    name: '📝 **MESSAGE COMMANDS - DETAILED GUIDE**', 
-                    value: '```' +
-                    '!message send Hello everyone :custom_emoji:\n' +
-                    '!message channel #general Welcome to the shop!\n' +
-                    '!message sendembed Title | Description | #FF0000\n' +
-                    '!message announce everyone Server update!\n' +
-                    '!message dm @user Thanks for your purchase!\n' +
-                    '!message edit 123456789 Updated text here\n' +
-                    '```', 
-                    inline: false 
-                },
-                { 
-                    name: '📝 Message Commands Detailed Explanations', 
-                    value: 
-                    '**`!message send <text>`** - Send message in current channel with emoji support\n' +
-                    '**`!message channel #channel <text>`** - Send message to specific channel\n' +
-                    '**`!message sendembed <title|desc|color>`** - Send rich embedded message\n' +
-                    '**`!message announce <everyone|here> <text>`** - Send announcement with ping\n' +
-                    '**`!message dm @user <text>`** - Send direct message to user\n' +
-                    '**`!message edit <message_id> <new_text>`** - Edit existing bot message\n' +
-                    '\n**Usage Examples:**\n' +
-                    '• `!message send Welcome! :shop_icon: Check our deals :fire:`\n' +
-                    '• `!message sendembed Shop Rules | No scamming :warning: | #FF0000`\n' +
-                    '• `!message announce everyone Maintenance tonight :tools:`\n',
-                    inline: false 
-                },
-
-                // CUSTOM EMOJI SUPPORT SECTION (ENHANCED)
-                { 
-                    name: '😀 **CUSTOM EMOJI SUPPORT - COMPLETE GUIDE**', 
-                    value: 
-                    '**Custom Server Emojis:** Use `:emoji_name:` format in ALL commands\n' +
-                    '   • `:shop_icon:`, `:verified:`, `:diamond:`, `:warning_sign:`\n' +
-                    '   • `:money_bag:`, `:shield:`, `:crown:`, `:fire:`\n\n' +
-                    '**Unicode Emojis:** Work normally everywhere\n' +
-                    '   • 🛒 💎 ⚠️ ✅ ❌ 🔔 🎉 ❤️ 🔥 ⭐ 💰 🛡️\n\n' +
-                    '**Works In:**\n' +
-                    '   • All message commands (`!message send`, `!message channel`, etc.)\n' +
-                    '   • Welcome messages (`!admin setwelcome`)\n' +
-                    '   • Persistent messages (`!admin setpersistent`)\n' +
-                    '   • Embed descriptions and titles\n' +
-                    '   • Announcements and DMs\n\n' +
-                    '**Example with emojis:** `!message send :diamond: VIP Sale! :fire: 50% off all items :money_bag:`\n',
-                    inline: false 
-                },
-
-                // Content Monitoring Section
-                { 
-                    name: '🎥 **CONTENT MONITORING**', 
-                    value: '```' +
-                    '!admin addcreator youtube UCChannelID Name #updates\n' +
-                    '!admin addcreator twitch streamername Name #live\n' +
-                    '!admin removecreator youtube UCChannelID\n' +
-                    '!admin listcreators\n' +
-                    '```', 
-                    inline: false 
-                },
-                { 
-                    name: '📝 Content Monitoring Explanations', 
-                    value: 
-                    '**`!admin addcreator <platform> <id> <n> #channel`**\n' +
-                    '   • Auto-post when creator uploads/goes live\n' +
-                    '   • Platform: youtube or twitch\n' +
-                    '**`!admin removecreator <platform> <id>`** - Stop monitoring creator\n' +
-                    '**`!admin listcreators`** - Show all monitored creators\n',
-                    inline: false 
-                },
-
-                // Database & Backup Section
-                { 
-                    name: '💾 **DATABASE & BACKUP**', 
-                    value: '```' +
-                    '!admin backup\n' +
-                    '!admin dbstats\n' +
-                    '!admin testdb\n' +
-                    '!admin cleanup\n' +
-                    '```', 
-                    inline: false 
-                },
-                { 
-                    name: '📝 Database & Backup Explanations', 
-                    value: 
-                    '**`!admin backup`** - Manually trigger database backup\n' +
-                    '**`!admin dbstats`** - Show detailed database statistics\n' +
-                    '**`!admin testdb`** - Test database connection\n' +
-                    '**`!admin cleanup`** - Clean old messages/data (30+ days)\n',
-                    inline: false 
-                },
-
-                // REAL WORLD EXAMPLES SECTION (ENHANCED)
-                { 
-                    name: '💡 **REAL WORLD SHOP EXAMPLES**', 
-                    value: 
-                    '```\n' +
-                    '# Welcome new customers with style\n' +
-                    '!admin setwelcome :shop_icon: Welcome to Tesco Market! :diamond:\n' +
-                    'Browse our items safely and select your roles below! :shield:\n\n' +
-                    '# Set trading rules with emojis\n' +
-                    '!admin setpersistent #rules :warning: TRADING RULES :warning:\n' +
-                    ':one: Use our middleman service :shield:\n' +
-                    ':two: No direct trades :x: Report scammers :police_car:\n\n' +
-                    '# Announce flash sales\n' +
-                    '!message announce everyone :fire: FLASH SALE :fire:\n' +
-                    '50% off rare items for next 2 hours! :money_bag:\n\n' +
-                    '# Send professional DMs to customers\n' +
-                    '!message dm @customer :heart: Thank you for your purchase!\n' +
-                    'Your order is being processed :gear: Questions? Contact staff! :speech_balloon:\n\n' +
-                    '# Create shop announcements\n' +
-                    '!message channel #announcements :new: NEW ITEMS ADDED :new:\n' +
-                    ':diamond: Legendary weapons now available! :crossed_swords:\n' +
-                    '```',
-                    inline: false 
-                },
-
-                // QUICK REFERENCE SECTION
-                { 
-                    name: '⚡ **QUICK REFERENCE**', 
-                    value: 
-                    '**Most Used Commands:**\n' +
-                    '• `!message send <text>` - Quick message with emoji support\n' +
-                    '• `!admin flagscammer @user <reason>` - Flag scammers\n' +
-                    '• `!admin updatetransaction <id> completed` - Complete sales\n' +
-                    '• `!admin setpersistent #channel <message>` - Set rules/info\n' +
-                    '• `!message announce everyone <text>` - Server announcements\n\n' +
-                    '**For Full Details:** Use `!message help` for complete message command guide\n',
-                    inline: false 
-                }
-            )
-            .setColor('#0099FF')
-            .setFooter({ 
-                text: 'Use "!message help" for detailed message examples | All commands support custom emojis' 
-            })
-            .setTimestamp();
-            
-        await message.reply({ embeds: [embed] });
-    }
-};
