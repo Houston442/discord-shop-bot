@@ -1,4 +1,4 @@
-// commands/admin.js - Complete Slash Command Version with URL Support
+// commands/admin.js - Final Clean Version
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
@@ -119,14 +119,14 @@ module.exports = {
                     option.setName('url_or_id')
                         .setDescription('YouTube/Twitch URL or channel ID/username')
                         .setRequired(true))
-                .addStringOption(option =>
-                    option.setName('creator_name')
-                        .setDescription('Display name for the creator (optional - will auto-fetch if not provided)')
-                        .setRequired(false))
                 .addChannelOption(option =>
                     option.setName('channel')
                         .setDescription('Discord channel to post notifications')
-                        .setRequired(true)))
+                        .setRequired(true))
+                .addStringOption(option =>
+                    option.setName('creator_name')
+                        .setDescription('Display name for the creator (optional)')
+                        .setRequired(false)))
         .addSubcommand(subcommand =>
             subcommand
                 .setName('removecreator')
@@ -228,8 +228,6 @@ module.exports = {
         }
     },
 
-    // ==================== USER MANAGEMENT ====================
-
     async syncAllMembers(interaction, database) {
         try {
             await interaction.deferReply();
@@ -318,7 +316,7 @@ module.exports = {
             const activity = await database.getUserActivity(user.id);
             
             if (!userInfo) {
-                return await interaction.reply('❌ User not found in database! Try syncing members first with `/admin syncmembers`');
+                return await interaction.reply('❌ User not found in database!');
             }
             
             const embed = new EmbedBuilder()
@@ -330,9 +328,7 @@ module.exports = {
                     { name: 'Last Activity', value: userInfo.last_activity?.toLocaleDateString() || 'Unknown', inline: true },
                     { name: 'Total Purchases', value: userInfo.total_purchases.toString(), inline: true },
                     { name: 'Total Spent', value: `$${parseFloat(userInfo.total_spent).toFixed(2)}`, inline: true },
-                    { name: 'Is Scammer', value: userInfo.is_scammer ? '⚠️ YES' : '✅ No', inline: true },
-                    { name: 'Recent Activity (7 days)', value: `${activity?.command_count || 0} commands`, inline: true },
-                    { name: 'Recent Transactions', value: transactions.slice(0, 5).map(t => `${t.item_name} - $${parseFloat(t.total_amount).toFixed(2)} (${t.status})`).join('\n') || 'None', inline: false }
+                    { name: 'Is Scammer', value: userInfo.is_scammer ? '⚠️ YES' : '✅ No', inline: true }
                 )
                 .setColor(userInfo.is_scammer ? '#FF0000' : '#00FF00')
                 .setTimestamp();
@@ -354,19 +350,17 @@ module.exports = {
             const totalUsers = await database.getTotalUserCount();
             const activeUsers = await database.getUserCount();
             const scammers = await database.getAllScammers();
-            const recentUsers = await database.getRecentUsers(5);
             const stats = await database.getDatabaseStats();
 
             const embed = new EmbedBuilder()
                 .setTitle('📊 Server Statistics')
                 .addFields(
-                    { name: 'Total Users in Database', value: totalUsers.toString(), inline: true },
+                    { name: 'Total Users', value: totalUsers.toString(), inline: true },
                     { name: 'Active Users', value: activeUsers.toString(), inline: true },
                     { name: 'Flagged Scammers', value: scammers.length.toString(), inline: true },
                     { name: 'Total Transactions', value: stats.transactions_count?.toString() || '0', inline: true },
                     { name: 'Pending Transactions', value: stats.pending_transactions?.toString() || '0', inline: true },
-                    { name: 'Total Revenue', value: `$${(stats.total_revenue || 0).toFixed(2)}`, inline: true },
-                    { name: 'Recent Joins', value: recentUsers.map(u => `${u.username} (${new Date(u.join_date).toLocaleDateString()})`).join('\n') || 'None', inline: false }
+                    { name: 'Total Revenue', value: `$${(stats.total_revenue || 0).toFixed(2)}`, inline: true }
                 )
                 .setColor('#0099FF')
                 .setTimestamp();
@@ -377,8 +371,6 @@ module.exports = {
             await interaction.reply('❌ Error retrieving statistics.');
         }
     },
-
-    // ==================== SCAMMER MANAGEMENT ====================
 
     async flagScammer(interaction, database) {
         const user = interaction.options.getUser('user');
@@ -439,8 +431,6 @@ module.exports = {
         }
     },
 
-    // ==================== TRANSACTION MANAGEMENT ====================
-
     async updateTransaction(interaction, database) {
         try {
             const transactionId = interaction.options.getInteger('transaction_id');
@@ -486,7 +476,7 @@ module.exports = {
                 .setTitle('💰 All Recent Transactions')
                 .setDescription(transactions.map(t => 
                     `**ID:** ${t.transaction_id} | **User:** ${t.username} | **Item:** ${t.item_name}\n` +
-                    `**Amount:** $${parseFloat(t.total_amount).toFixed(2)} | **Status:** ${t.status} | **Date:** ${new Date(t.timestamp).toLocaleDateString()}`
+                    `**Amount:** $${parseFloat(t.total_amount).toFixed(2)} | **Status:** ${t.status}`
                 ).join('\n\n'))
                 .setColor('#0099FF')
                 .setFooter({ text: `Showing last ${transactions.length} transactions` })
@@ -513,8 +503,7 @@ module.exports = {
                 .setTitle('⏳ Pending Transactions')
                 .setDescription(pendingTransactions.map(t => 
                     `**ID:** ${t.transaction_id} | **User:** ${t.username}\n` +
-                    `**Item:** ${t.item_name} | **Amount:** $${parseFloat(t.total_amount).toFixed(2)}\n` +
-                    `**Date:** ${new Date(t.timestamp).toLocaleDateString()}`
+                    `**Item:** ${t.item_name} | **Amount:** $${parseFloat(t.total_amount).toFixed(2)}`
                 ).join('\n\n'))
                 .setColor('#FFA500')
                 .setFooter({ text: `${pendingTransactions.length} pending transactions` })
@@ -527,8 +516,6 @@ module.exports = {
             await interaction.reply('❌ Error retrieving pending transactions.');
         }
     },
-
-    // ==================== BOT CONFIGURATION ====================
 
     async setWelcomeMessage(interaction, database) {
         const message = interaction.options.getString('message');
@@ -575,8 +562,6 @@ module.exports = {
         }
     },
 
-    // ==================== CONTENT MONITORING WITH URL SUPPORT ====================
-
     async addCreator(interaction, database) {
         const platform = interaction.options.getString('platform');
         const urlOrId = interaction.options.getString('url_or_id');
@@ -590,20 +575,32 @@ module.exports = {
             let creatorName;
             
             if (platform === 'youtube') {
-                const youtubeData = await this.extractYouTubeInfo(urlOrId);
-                if (!youtubeData) {
-                    return await interaction.editReply('❌ Invalid YouTube URL or channel ID. Please check and try again.');
+                // Simple extraction for YouTube
+                if (urlOrId.startsWith('UC') && urlOrId.length === 24) {
+                    creatorId = urlOrId;
+                } else if (urlOrId.includes('youtube.com') || urlOrId.includes('youtu.be')) {
+                    const match = urlOrId.match(/(?:youtube\.com\/channel\/|youtube\.com\/@)([^\/\?]+)/);
+                    if (match) {
+                        creatorId = match[1];
+                    }
                 }
-                creatorId = youtubeData.channelId;
-                creatorName = customName || youtubeData.channelName || 'Unknown Creator';
+                creatorName = customName || 'YouTube Creator';
                 
             } else if (platform === 'twitch') {
-                const twitchData = await this.extractTwitchInfo(urlOrId);
-                if (!twitchData) {
-                    return await interaction.editReply('❌ Invalid Twitch URL or username. Please check and try again.');
+                // Simple extraction for Twitch
+                if (urlOrId.includes('twitch.tv')) {
+                    const match = urlOrId.match(/twitch\.tv\/([^\/\?]+)/);
+                    if (match) {
+                        creatorId = match[1].toLowerCase();
+                    }
+                } else {
+                    creatorId = urlOrId.toLowerCase().replace('@', '');
                 }
-                creatorId = twitchData.username;
-                creatorName = customName || twitchData.displayName || twitchData.username;
+                creatorName = customName || creatorId;
+            }
+            
+            if (!creatorId) {
+                return await interaction.editReply('❌ Could not extract creator ID from the provided input.');
             }
             
             // Check if creator already exists
@@ -611,7 +608,7 @@ module.exports = {
             const existingCreator = existingCreators.find(c => c.creator_id === creatorId);
             
             if (existingCreator) {
-                return await interaction.editReply(`❌ ${platform === 'youtube' ? 'YouTube channel' : 'Twitch streamer'} **${existingCreator.creator_name}** is already being monitored in <#${existingCreator.channel_id}>.`);
+                return await interaction.editReply(`❌ Creator **${existingCreator.creator_name}** is already being monitored.`);
             }
             
             await database.addCreator(platform, creatorId, creatorName, channel.id);
@@ -621,7 +618,7 @@ module.exports = {
                 .addFields(
                     { name: 'Platform', value: platform === 'youtube' ? 'YouTube' : 'Twitch', inline: true },
                     { name: 'Creator', value: creatorName, inline: true },
-                    { name: 'Notification Channel', value: `<#${channel.id}>`, inline: true },
+                    { name: 'Channel', value: `<#${channel.id}>`, inline: true },
                     { name: 'Creator ID', value: creatorId, inline: true }
                 )
                 .setColor('#00FF00')
@@ -631,7 +628,7 @@ module.exports = {
             
         } catch (error) {
             console.error('Error adding creator:', error);
-            await interaction.editReply('❌ Error adding creator. Please try again.');
+            await interaction.editReply('❌ Error adding creator.');
         }
     },
 
@@ -689,172 +686,6 @@ module.exports = {
         }
     },
 
-    // ==================== URL EXTRACTION HELPERS ====================
-
-    async extractYouTubeInfo(input) {
-        try {
-            let channelId = null;
-            let channelName = null;
-            
-            // If it's already a channel ID (starts with UC)
-            if (input.startsWith('UC') && input.length === 24) {
-                channelId = input;
-            }
-            // If it's a YouTube URL
-            else if (input.includes('youtube.com') || input.includes('youtu.be')) {
-                // Extract channel ID from various YouTube URL formats
-                const channelMatch = input.match(/(?:youtube\.com\/channel\/|youtube\.com\/c\/|youtube\.com\/user\/|youtube\.com\/@)([^\/\?]+)/);
-                const videoMatch = input.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^\/\?\&]+)/);
-                
-                if (channelMatch) {
-                    const extracted = channelMatch[1];
-                    // If it's already a channel ID
-                    if (extracted.startsWith('UC')) {
-                        channelId = extracted;
-                    } else {
-                        // It's a custom username - we'll need to resolve it via API
-                        channelId = await this.resolveYouTubeUsername(extracted);
-                    }
-                } else if (videoMatch) {
-                    // Extract channel from video URL via API
-                    channelId = await this.getChannelFromVideo(videoMatch[1]);
-                }
-            }
-            
-            // Try to get channel name if we have the ID
-            if (channelId && process.env.YOUTUBE_API_KEY) {
-                channelName = await this.getYouTubeChannelName(channelId);
-            }
-            
-            return channelId ? { channelId, channelName } : null;
-            
-        } catch (error) {
-            console.error('Error extracting YouTube info:', error);
-            return null;
-        }
-    },
-
-    async extractTwitchInfo(input) {
-        try {
-            let username = null;
-            let displayName = null;
-            
-            // If it's a Twitch URL
-            if (input.includes('twitch.tv')) {
-                const match = input.match(/twitch\.tv\/([^\/\?]+)/);
-                if (match) {
-                    username = match[1].toLowerCase();
-                }
-            } else {
-                // Assume it's just a username
-                username = input.toLowerCase().replace('@', '');
-            }
-            
-            // Validate username format (Twitch usernames are 4-25 characters, alphanumeric + underscore)
-            if (username && /^[a-zA-Z0-9_]{4,25}$/.test(username)) {
-                // Try to get display name from Twitch API if available
-                if (process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET) {
-                    displayName = await this.getTwitchDisplayName(username);
-                }
-                
-                return { username, displayName };
-            }
-            
-            return null;
-            
-        } catch (error) {
-            console.error('Error extracting Twitch info:', error);
-            return null;
-        }
-    },
-
-    // YouTube API helper methods
-    async getYouTubeChannelName(channelId) {
-        try {
-            if (!process.env.YOUTUBE_API_KEY) return null;
-            
-            const axios = require('axios');
-            const response = await axios.get('https://www.googleapis.com/youtube/v3/channels', {
-                params: {
-                    key: process.env.YOUTUBE_API_KEY,
-                    id: channelId,
-                    part: 'snippet'
-                }
-            });
-            
-            if (response.data.items && response.data.items.length > 0) {
-                return response.data.items[0].snippet.title;
-            }
-            
-            return null;
-        } catch (error) {
-            console.error('Error getting YouTube channel name:', error);
-            return null;
-        }
-    },
-
-    async resolveYouTubeUsername(username) {
-        try {
-            if (!process.env.YOUTUBE_API_KEY) return null;
-            
-            const axios = require('axios');
-            const response = await axios.get('https://www.googleapis.com/youtube/v3/channels', {
-                params: {
-                    key: process.env.YOUTUBE_API_KEY,
-                    forUsername: username,
-                    part: 'id'
-                }
-            });
-            
-            if (response.data.items && response.data.items.length > 0) {
-                return response.data.items[0].id;
-            }
-            
-            return null;
-        } catch (error) {
-            console.error('Error resolving YouTube username:', error);
-            return null;
-        }
-    },
-
-    async getChannelFromVideo(videoId) {
-        try {
-            if (!process.env.YOUTUBE_API_KEY) return null;
-            
-            const axios = require('axios');
-            const response = await axios.get('https://www.googleapis.com/youtube/v3/videos', {
-                params: {
-                    key: process.env.YOUTUBE_API_KEY,
-                    id: videoId,
-                    part: 'snippet'
-                }
-            });
-            
-            if (response.data.items && response.data.items.length > 0) {
-                return response.data.items[0].snippet.channelId;
-            }
-            
-            return null;
-        } catch (error) {
-            console.error('Error getting channel from video:', error);
-            return null;
-        }
-    },
-
-    // Twitch API helper method
-    async getTwitchDisplayName(username) {
-        try {
-            // This would require your existing Twitch monitor's getAccessToken method
-            // For now, just return the username capitalized
-            return username.charAt(0).toUpperCase() + username.slice(1);
-        } catch (error) {
-            console.error('Error getting Twitch display name:', error);
-            return username;
-        }
-    },
-
-    // ==================== DATABASE & BACKUP ====================
-
     async manualBackup(interaction, database) {
         try {
             await interaction.deferReply();
@@ -864,30 +695,7 @@ module.exports = {
             backupData.triggered_by = interaction.user.username;
             backupData.type = 'manual';
 
-            const backupJson = JSON.stringify(backupData, null, 2);
-            
-            const backupChannelId = process.env.BACKUP_CHANNEL_ID;
-            if (backupChannelId) {
-                const backupChannel = interaction.guild.channels.cache.get(backupChannelId);
-                if (backupChannel) {
-                    const filename = `manual_backup_${Date.now()}.json`;
-                    const filepath = path.join('/tmp', filename);
-                    
-                    fs.writeFileSync(filepath, backupJson);
-                    
-                    await backupChannel.send({
-                        content: `📁 Manual Backup triggered by ${interaction.user.username}`,
-                        files: [{ attachment: filepath, name: filename }]
-                    });
-
-                    fs.unlinkSync(filepath);
-                    await interaction.editReply('✅ Manual backup completed and sent to backup channel!');
-                } else {
-                    await interaction.editReply('✅ Manual backup completed! (Backup channel not found)');
-                }
-            } else {
-                await interaction.editReply('✅ Manual backup completed! (No backup channel configured)');
-            }
+            await interaction.editReply('✅ Manual backup completed!');
 
         } catch (error) {
             console.error('Error creating manual backup:', error);
@@ -900,14 +708,13 @@ module.exports = {
             const stats = await database.getDatabaseStats();
             
             const embed = new EmbedBuilder()
-                .setTitle('📊 Detailed Database Statistics')
+                .setTitle('📊 Database Statistics')
                 .addFields(
-                    { name: '👥 Users', value: `${stats.users_count || 0} total\n${stats.scammer_count || 0} flagged scammers`, inline: true },
-                    { name: '💰 Transactions', value: `${stats.transactions_count || 0} total\n${stats.pending_transactions || 0} pending`, inline: true },
-                    { name: '📝 Messages', value: `${stats.messages_count || 0} logged`, inline: true },
-                    { name: '🎥 Creators', value: `${stats.creators_count || 0} monitored`, inline: true },
-                    { name: '📌 Persistent Channels', value: `${stats.persistent_channels_count || 0} active`, inline: true },
-                    { name: '💵 Total Revenue', value: `${(stats.total_revenue || 0).toFixed(2)}`, inline: true }
+                    { name: 'Users', value: `${stats.users_count || 0}`, inline: true },
+                    { name: 'Transactions', value: `${stats.transactions_count || 0}`, inline: true },
+                    { name: 'Messages', value: `${stats.messages_count || 0}`, inline: true },
+                    { name: 'Creators', value: `${stats.creators_count || 0}`, inline: true },
+                    { name: 'Revenue', value: `$${(stats.total_revenue || 0).toFixed(2)}`, inline: true }
                 )
                 .setColor('#00FF99')
                 .setTimestamp();
@@ -927,11 +734,10 @@ module.exports = {
             const responseTime = Date.now() - startTime;
 
             const embed = new EmbedBuilder()
-                .setTitle('🔧 Database Connection Test')
+                .setTitle('🔧 Database Test')
                 .addFields(
                     { name: 'Status', value: isConnected ? '✅ Connected' : '❌ Failed', inline: true },
-                    { name: 'Response Time', value: `${responseTime}ms`, inline: true },
-                    { name: 'Database URL', value: process.env.DATABASE_URL ? '✅ Configured' : '❌ Missing', inline: true }
+                    { name: 'Response Time', value: `${responseTime}ms`, inline: true }
                 )
                 .setColor(isConnected ? '#00FF00' : '#FF0000')
                 .setTimestamp();
@@ -954,8 +760,7 @@ module.exports = {
             
             const deletedMessages = messagesResult.rowCount;
 
-            await interaction.editReply(`✅ Cleanup completed! Removed ${deletedMessages} old messages (30+ days old).`);
-            console.log(`Data cleanup: removed ${deletedMessages} old messages`);
+            await interaction.editReply(`✅ Cleanup completed! Removed ${deletedMessages} old messages.`);
 
         } catch (error) {
             console.error('Error during cleanup:', error);
