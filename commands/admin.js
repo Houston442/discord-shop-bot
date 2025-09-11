@@ -962,47 +962,4 @@ module.exports = {
             await interaction.editReply('❌ Error during cleanup.');
         }
     }
-};YouTubeInfo(input) {
-        try {
-            let channelId = null;
-            let channelName = null;
-            
-            // If it's already a channel ID (starts with UC)
-            if (input.startsWith('UC') && input.length === 24) {
-                channelId = input;
-            }
-            // If it's a YouTube URL
-            else if (input.includes('youtube.com') || input.includes('youtu.be')) {
-                // Extract channel ID from various YouTube URL formats
-                const channelMatch = input.match(/(?:youtube\.com\/channel\/|youtube\.com\/c\/|youtube\.com\/user\/|youtube\.com\/@)([^\/\?]+)/);
-                const videoMatch = input.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^\/\?\&]+)/);
-                
-                if (channelMatch) {
-                    const extracted = channelMatch[1];
-                    // If it's already a channel ID
-                    if (extracted.startsWith('UC')) {
-                        channelId = extracted;
-                    } else {
-                        // It's a custom username - we'll need to resolve it via API
-                        channelId = await this.resolveYouTubeUsername(extracted);
-                    }
-                } else if (videoMatch) {
-                    // Extract channel from video URL via API
-                    channelId = await this.getChannelFromVideo(videoMatch[1]);
-                }
-            }
-            
-            // Try to get channel name if we have the ID
-            if (channelId && process.env.YOUTUBE_API_KEY) {
-                channelName = await this.getYouTubeChannelName(channelId);
-            }
-            
-            return channelId ? { channelId, channelName } : null;
-            
-        } catch (error) {
-            console.error('Error extracting YouTube info:', error);
-            return null;
-        }
-    },
-
-    async extract
+};
