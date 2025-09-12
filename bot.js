@@ -376,31 +376,80 @@ class ShopBot {
             if (interaction.customId.startsWith('role_setup_')) {
                 // Handle custom role setup selections
                 const setupId = interaction.customId.split('_')[2];
-                const selectedValue = interaction.values[0];
+                const selectedValues = interaction.values; // Array of selected option IDs
                 
-                // Get the role setup option
+                // Get the role setup options
                 const options = await this.database.getRoleSetupOptions(setupId);
-                const selectedOption = options.find(opt => opt.option_id.toString() === selectedValue);
                 
-                if (!selectedOption) {
-                    return await interaction.reply({ content: 'Role option not found!', ephemeral: true });
+                if (options.length === 0) {
+                    return await interaction.reply({ content: 'No role options found for this setup!', ephemeral: true });
                 }
                 
                 const member = interaction.member;
                 const guild = interaction.guild;
-                const role = guild.roles.cache.get(selectedOption.discord_role_id);
                 
-                if (!role) {
-                    return await interaction.reply({ content: 'Role not found!', ephemeral: true });
+                // Get all roles from this setup that the member currently has
+                const setupRoleIds = options.map(opt => opt.discord_role_id);
+                const currentSetupRoles = member.roles.cache.filter(role => setupRoleIds.includes(role.id));
+                
+                // Get the roles that should be assigned (based on selection)
+                const selectedOptions = options.filter(opt => selectedValues.includes(opt.option_id.toString()));
+                const selectedRoleIds = selectedOptions.map(opt => opt.discord_role_id);
+                
+                let addedRoles = [];
+                let removedRoles = [];
+                
+                // Add roles that are selected but not currently assigned
+                for (const option of selectedOptions) {
+                    const role = guild.roles.cache.get(option.discord_role_id);
+                    if (role && !member.roles.cache.has(role.id)) {
+                        try {
+                            await member.roles.add(role);
+                            addedRoles.push(role.name);
+                        } catch (error) {
+                            console.error(`Failed to add role ${role.name}:`, error);
+                        }
+                    }
                 }
-
-                if (member.roles.cache.has(role.id)) {
-                    await member.roles.remove(role);
-                    await interaction.reply({ content: `Removed role: ${role.name}`, ephemeral: true });
-                } else {
-                    await member.roles.add(role);
-                    await interaction.reply({ content: `Added role: ${role.name}`, ephemeral: true });
+                
+                // Remove roles that are currently assigned but not selected
+                for (const [roleId, role] of currentSetupRoles) {
+                    if (!selectedRoleIds.includes(roleId)) {
+                        try {
+                            await member.roles.remove(role);
+                            removedRoles.push(role.name);
+                        } catch (error) {
+                            console.error(`Failed to remove role ${role.name}:`, error);
+                        }
+                    }
                 }
+                
+                // Create response message
+                let responseMessage = '';
+                
+                if (addedRoles.length > 0) {
+                    responseMessage += `✅ **Added:** ${addedRoles.join(', ')}\n`;
+                }
+                
+                if (removedRoles.length > 0) {
+                    responseMessage += `❌ **Removed:** ${removedRoles.join(', ')}\n`;
+                }
+                
+                if (addedRoles.length === 0 && removedRoles.length === 0) {
+                    responseMessage = '✨ **No changes** - Your roles are already up to date!';
+                }
+                
+                // Add current roles info
+                const currentRoles = member.roles.cache
+                    .filter(role => setupRoleIds.includes(role.id))
+                    .map(role => role.name);
+                    
+                if (currentRoles.length > 0) {
+                    responseMessage += `\n🎭 **Current roles from this menu:** ${currentRoles.join(', ')}`;
+                }
+                
+                await interaction.reply({ content: responseMessage, ephemeral: true });
+                
             } else {
                 // Handle legacy role selection (if any old role menus exist)
                 const selectedRole = interaction.values[0];
@@ -411,7 +460,7 @@ class ShopBot {
                 if (!role) {
                     return await interaction.reply({ content: 'Role not found!', ephemeral: true });
                 }
-
+    
                 if (member.roles.cache.has(role.id)) {
                     await member.roles.remove(role);
                     await interaction.reply({ content: `Removed role: ${role.name}`, ephemeral: true });
