@@ -1,4 +1,4 @@
-// commands/admin.js - Clean Complete File
+// commands/admin.js - Updated with proper setuproles slash commands
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
@@ -8,6 +8,7 @@ module.exports = {
         .setName('admin')
         .setDescription('Admin commands for bot management')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+        // Transaction Commands
         .addSubcommand(subcommand =>
             subcommand
                 .setName('buy')
@@ -45,6 +46,7 @@ module.exports = {
             subcommand
                 .setName('leaderboard')
                 .setDescription('Show top sellers leaderboard'))
+        // User Management Commands
         .addSubcommand(subcommand =>
             subcommand
                 .setName('syncmembers')
@@ -61,6 +63,125 @@ module.exports = {
             subcommand
                 .setName('stats')
                 .setDescription('Show server statistics and database overview'))
+        // Basic Role Management Commands
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('syncroles')
+                .setDescription('Sync all Discord server roles to database'))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('listroles')
+                .setDescription('List all server roles'))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('setautorole')
+                .setDescription('Set role that gets auto-assigned to new members')
+                .addRoleOption(option =>
+                    option.setName('role')
+                        .setDescription('Role to auto-assign (or none to disable)')
+                        .setRequired(false)))
+        // Role Setup Management Commands
+        .addSubcommandGroup(group =>
+            group
+                .setName('setuproles')
+                .setDescription('Manage role selection menu configurations')
+                .addSubcommand(subcommand =>
+                    subcommand
+                        .setName('create')
+                        .setDescription('Create a new role setup configuration')
+                        .addStringOption(option =>
+                            option.setName('name')
+                                .setDescription('Name for this role setup')
+                                .setRequired(true)))
+                .addSubcommand(subcommand =>
+                    subcommand
+                        .setName('configure')
+                        .setDescription('Configure embed appearance for a role setup')
+                        .addIntegerOption(option =>
+                            option.setName('setup_id')
+                                .setDescription('Setup ID to configure')
+                                .setRequired(true))
+                        .addStringOption(option =>
+                            option.setName('title')
+                                .setDescription('Embed title')
+                                .setRequired(false))
+                        .addStringOption(option =>
+                            option.setName('description')
+                                .setDescription('Embed description')
+                                .setRequired(false))
+                        .addStringOption(option =>
+                            option.setName('color')
+                                .setDescription('Embed color (hex format like #FF0000)')
+                                .setRequired(false))
+                        .addStringOption(option =>
+                            option.setName('thumbnail')
+                                .setDescription('Thumbnail image URL')
+                                .setRequired(false))
+                        .addStringOption(option =>
+                            option.setName('image')
+                                .setDescription('Main image URL')
+                                .setRequired(false))
+                        .addStringOption(option =>
+                            option.setName('footer')
+                                .setDescription('Footer text')
+                                .setRequired(false)))
+                .addSubcommand(subcommand =>
+                    subcommand
+                        .setName('addrole')
+                        .setDescription('Add a role option to a setup')
+                        .addIntegerOption(option =>
+                            option.setName('setup_id')
+                                .setDescription('Setup ID to add role to')
+                                .setRequired(true))
+                        .addRoleOption(option =>
+                            option.setName('role')
+                                .setDescription('Discord role to add')
+                                .setRequired(true))
+                        .addStringOption(option =>
+                            option.setName('label')
+                                .setDescription('Display label for this role option')
+                                .setRequired(true))
+                        .addStringOption(option =>
+                            option.setName('description')
+                                .setDescription('Description for this role option')
+                                .setRequired(false))
+                        .addStringOption(option =>
+                            option.setName('emoji')
+                                .setDescription('Emoji for this role option (e.g., 🎮 or :custom_emoji:)')
+                                .setRequired(false)))
+                .addSubcommand(subcommand =>
+                    subcommand
+                        .setName('removerole')
+                        .setDescription('Remove a role option from a setup')
+                        .addIntegerOption(option =>
+                            option.setName('setup_id')
+                                .setDescription('Setup ID to remove role from')
+                                .setRequired(true))
+                        .addIntegerOption(option =>
+                            option.setName('option_number')
+                                .setDescription('Option number to remove (use list command to see numbers)')
+                                .setRequired(true)))
+                .addSubcommand(subcommand =>
+                    subcommand
+                        .setName('list')
+                        .setDescription('List all role setup configurations'))
+                .addSubcommand(subcommand =>
+                    subcommand
+                        .setName('delete')
+                        .setDescription('Delete a role setup configuration')
+                        .addIntegerOption(option =>
+                            option.setName('setup_id')
+                                .setDescription('Setup ID to delete')
+                                .setRequired(true)))
+                .addSubcommand(subcommand =>
+                    subcommand
+                        .setName('view')
+                        .setDescription('View detailed configuration of a role setup')
+                        .addIntegerOption(option =>
+                            option.setName('setup_id')
+                                .setDescription('Setup ID to view')
+                                .setRequired(true))))
+        // Scammer Management Commands
         .addSubcommand(subcommand =>
             subcommand
                 .setName('flagscammer')
@@ -85,6 +206,7 @@ module.exports = {
             subcommand
                 .setName('scammerlist')
                 .setDescription('Display all flagged scammers with notes'))
+        // Bot Configuration Commands
         .addSubcommand(subcommand =>
             subcommand
                 .setName('setwelcome')
@@ -113,6 +235,7 @@ module.exports = {
                     option.setName('channel')
                         .setDescription('Channel to remove persistent message from')
                         .setRequired(true)))
+        // System Commands
         .addSubcommand(subcommand =>
             subcommand
                 .setName('backup')
@@ -130,10 +253,41 @@ module.exports = {
                 .setName('cleanup')
                 .setDescription('Clean old messages/data (30+ days)')),
     
-    async execute(interaction, database) {
+    async execute(interaction, database, bot) {
         const subcommand = interaction.options.getSubcommand();
+        const subcommandGroup = interaction.options.getSubcommandGroup();
         
+        // Handle setuproles subcommand group
+        if (subcommandGroup === 'setuproles') {
+            switch (subcommand) {
+                case 'create':
+                    await this.setuprolesCreate(interaction, database);
+                    break;
+                case 'configure':
+                    await this.setuprolesConfigure(interaction, database);
+                    break;
+                case 'addrole':
+                    await this.setuprolesAddRole(interaction, database);
+                    break;
+                case 'removerole':
+                    await this.setuprolesRemoveRole(interaction, database);
+                    break;
+                case 'list':
+                    await this.setuprolesList(interaction, database);
+                    break;
+                case 'delete':
+                    await this.setuprolesDelete(interaction, database);
+                    break;
+                case 'view':
+                    await this.setuprolesView(interaction, database);
+                    break;
+            }
+            return;
+        }
+        
+        // Handle regular subcommands
         switch (subcommand) {
+            // Transaction Commands
             case 'buy':
                 await this.createTransaction(interaction, database);
                 break;
@@ -146,6 +300,7 @@ module.exports = {
             case 'leaderboard':
                 await this.showLeaderboard(interaction, database);
                 break;
+            // User Management Commands
             case 'syncmembers':
                 await this.syncAllMembers(interaction, database);
                 break;
@@ -155,6 +310,17 @@ module.exports = {
             case 'stats':
                 await this.showStats(interaction, database);
                 break;
+            // Role Management Commands
+            case 'syncroles':
+                await this.syncAllRoles(interaction, database);
+                break;
+            case 'listroles':
+                await this.listRoles(interaction, database);
+                break;
+            case 'setautorole':
+                await this.setAutoRole(interaction, database);
+                break;
+            // Scammer Management Commands
             case 'flagscammer':
                 await this.flagScammer(interaction, database);
                 break;
@@ -164,6 +330,7 @@ module.exports = {
             case 'scammerlist':
                 await this.listScammers(interaction, database);
                 break;
+            // Bot Configuration Commands
             case 'setwelcome':
                 await this.setWelcomeMessage(interaction, database);
                 break;
@@ -173,6 +340,7 @@ module.exports = {
             case 'removepersistent':
                 await this.removePersistentChannel(interaction, database);
                 break;
+            // System Commands
             case 'backup':
                 await this.manualBackup(interaction, database);
                 break;
@@ -188,6 +356,406 @@ module.exports = {
         }
     },
 
+    // ==================== ROLE SETUP MANAGEMENT METHODS ====================
+
+    async setuprolesCreate(interaction, database) {
+        try {
+            const setupName = interaction.options.getString('name');
+            
+            // Check if setup name already exists
+            const existingSetups = await database.getAllRoleSetups();
+            if (existingSetups.some(setup => setup.setup_name.toLowerCase() === setupName.toLowerCase())) {
+                return await interaction.reply('❌ A role setup with that name already exists. Please choose a different name.');
+            }
+            
+            // Create initial setup in database
+            const setupId = await database.createRoleSetup(
+                setupName,
+                interaction.user.id,
+                'Role Selection',
+                'Select your roles from the dropdown below!',
+                null, // thumbnail
+                null, // image
+                '#0099FF', // color
+                null // footer
+            );
+            
+            const embed = new EmbedBuilder()
+                .setTitle('✅ Role Setup Created!')
+                .setDescription(`**Setup Name:** ${setupName}\n**Setup ID:** ${setupId}`)
+                .addFields(
+                    { name: 'Next Steps', value: 
+                      `🔧 Configure appearance: \`/admin setuproles configure ${setupId}\`\n` +
+                      `🎭 Add role options: \`/admin setuproles addrole ${setupId}\`\n` +
+                      `👀 Preview setup: \`/roles preview ${setupId}\`\n` +
+                      `🚀 Deploy when ready: \`/roles deploy ${setupId}\``, inline: false }
+                )
+                .addFields(
+                    { name: 'Default Settings', value: 
+                      `**Title:** Role Selection\n` +
+                      `**Description:** Select your roles from the dropdown below!\n` +
+                      `**Color:** #0099FF\n` +
+                      `**Role Options:** 0 (none added yet)`, inline: false }
+                )
+                .setColor('#00FF00')
+                .setTimestamp();
+            
+            await interaction.reply({ embeds: [embed] });
+            
+        } catch (error) {
+            console.error('Error creating role setup:', error);
+            await interaction.reply('❌ Error creating role setup.');
+        }
+    },
+
+    async setuprolesConfigure(interaction, database) {
+        try {
+            const setupId = interaction.options.getInteger('setup_id');
+            const title = interaction.options.getString('title');
+            const description = interaction.options.getString('description');
+            const color = interaction.options.getString('color');
+            const thumbnail = interaction.options.getString('thumbnail');
+            const image = interaction.options.getString('image');
+            const footer = interaction.options.getString('footer');
+            
+            // Get the role setup
+            const setup = await database.getRoleSetup(setupId);
+            if (!setup) {
+                return await interaction.reply('❌ Role setup not found.');
+            }
+            
+            // Check permissions
+            if (setup.created_by !== interaction.user.id && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+                return await interaction.reply('❌ You can only configure role setups that you created.');
+            }
+            
+            // Update the setup with provided values
+            const updateQuery = `
+                UPDATE role_setups SET 
+                    embed_title = COALESCE($2, embed_title),
+                    embed_description = COALESCE($3, embed_description),
+                    embed_color = COALESCE($4, embed_color),
+                    embed_thumbnail_url = COALESCE($5, embed_thumbnail_url),
+                    embed_image_url = COALESCE($6, embed_image_url),
+                    embed_footer_text = COALESCE($7, embed_footer_text),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE setup_id = $1
+            `;
+            
+            await database.pool.query(updateQuery, [setupId, title, description, color, thumbnail, image, footer]);
+            
+            // Get updated setup
+            const updatedSetup = await database.getRoleSetup(setupId);
+            
+            const changesText = [];
+            if (title) changesText.push(`**Title:** ${title}`);
+            if (description) changesText.push(`**Description:** ${description}`);
+            if (color) changesText.push(`**Color:** ${color}`);
+            if (thumbnail) changesText.push(`**Thumbnail:** ${thumbnail}`);
+            if (image) changesText.push(`**Image:** ${image}`);
+            if (footer) changesText.push(`**Footer:** ${footer}`);
+            
+            const embed = new EmbedBuilder()
+                .setTitle('✅ Role Setup Configuration Updated')
+                .setDescription(`**Setup:** ${updatedSetup.setup_name} (ID: ${setupId})`)
+                .addFields(
+                    { name: 'Changes Made', value: changesText.length > 0 ? changesText.join('\n') : 'No changes specified', inline: false },
+                    { name: 'Current Configuration', value: 
+                      `**Title:** ${updatedSetup.embed_title || 'Role Selection'}\n` +
+                      `**Description:** ${(updatedSetup.embed_description || 'Select your roles...').substring(0, 100)}${updatedSetup.embed_description?.length > 100 ? '...' : ''}\n` +
+                      `**Color:** ${updatedSetup.embed_color || '#0099FF'}\n` +
+                      `**Thumbnail:** ${updatedSetup.embed_thumbnail_url ? 'Set' : 'None'}\n` +
+                      `**Image:** ${updatedSetup.embed_image_url ? 'Set' : 'None'}\n` +
+                      `**Footer:** ${updatedSetup.embed_footer_text || 'None'}`, inline: false }
+                )
+                .setColor(updatedSetup.embed_color || '#0099FF')
+                .setTimestamp();
+            
+            await interaction.reply({ embeds: [embed] });
+            
+        } catch (error) {
+            console.error('Error configuring role setup:', error);
+            await interaction.reply('❌ Error configuring role setup. Check that color is in hex format (#FF0000) and URLs are valid.');
+        }
+    },
+
+    async setuprolesAddRole(interaction, database) {
+        try {
+            const setupId = interaction.options.getInteger('setup_id');
+            const role = interaction.options.getRole('role');
+            const label = interaction.options.getString('label');
+            const description = interaction.options.getString('description') || `Toggle the ${role.name} role`;
+            const emoji = interaction.options.getString('emoji') || null;
+            
+            // Get the role setup
+            const setup = await database.getRoleSetup(setupId);
+            if (!setup) {
+                return await interaction.reply('❌ Role setup not found.');
+            }
+            
+            // Check permissions
+            if (setup.created_by !== interaction.user.id && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+                return await interaction.reply('❌ You can only modify role setups that you created.');
+            }
+            
+            // Check if role already exists in this setup
+            const existingOptions = await database.getRoleSetupOptions(setupId);
+            if (existingOptions.some(option => option.discord_role_id === role.id)) {
+                return await interaction.reply('❌ This role is already added to this setup.');
+            }
+            
+            // Check Discord's limit of 25 options per select menu
+            if (existingOptions.length >= 25) {
+                return await interaction.reply('❌ Cannot add more than 25 role options per setup (Discord limit).');
+            }
+            
+            // Add the role to database first to sync it
+            await database.addServerRole(
+                role.id,
+                role.name,
+                role.color,
+                role.position,
+                role.permissions.bitfield.toString(),
+                role.hoist,
+                role.mentionable,
+                role.managed
+            );
+            
+            // Add the role option
+            await database.addRoleSetupOption(
+                setupId,
+                label,
+                description,
+                emoji,
+                role.id,
+                existingOptions.length + 1 // order
+            );
+            
+            const embed = new EmbedBuilder()
+                .setTitle('✅ Role Option Added')
+                .setDescription(`**Setup:** ${setup.setup_name} (ID: ${setupId})`)
+                .addFields(
+                    { name: 'Added Role Option', value: 
+                      `${emoji || '🎭'} **${label}**\n` +
+                      `**Role:** ${role}\n` +
+                      `**Description:** ${description}\n` +
+                      `**Position:** ${existingOptions.length + 1}`, inline: false },
+                    { name: 'Setup Status', value: 
+                      `**Total Options:** ${existingOptions.length + 1}/25\n` +
+                      `**Ready to Deploy:** ${existingOptions.length + 1 > 0 ? 'Yes' : 'No'}`, inline: false }
+                )
+                .setColor(role.color || '#0099FF')
+                .setTimestamp();
+            
+            await interaction.reply({ embeds: [embed] });
+            
+        } catch (error) {
+            console.error('Error adding role option:', error);
+            await interaction.reply('❌ Error adding role option.');
+        }
+    },
+
+    async setuprolesRemoveRole(interaction, database) {
+        try {
+            const setupId = interaction.options.getInteger('setup_id');
+            const optionNumber = interaction.options.getInteger('option_number');
+            
+            // Get the role setup
+            const setup = await database.getRoleSetup(setupId);
+            if (!setup) {
+                return await interaction.reply('❌ Role setup not found.');
+            }
+            
+            // Check permissions
+            if (setup.created_by !== interaction.user.id && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+                return await interaction.reply('❌ You can only modify role setups that you created.');
+            }
+            
+            // Get existing options
+            const existingOptions = await database.getRoleSetupOptions(setupId);
+            
+            if (optionNumber < 1 || optionNumber > existingOptions.length) {
+                return await interaction.reply(`❌ Invalid option number. Use \`/admin setuproles view ${setupId}\` to see valid option numbers (1-${existingOptions.length}).`);
+            }
+            
+            // Get the option to remove
+            const optionToRemove = existingOptions[optionNumber - 1];
+            
+            // Remove the option
+            await database.pool.query(
+                'DELETE FROM role_setup_options WHERE option_id = $1',
+                [optionToRemove.option_id]
+            );
+            
+            // Reorder remaining options
+            for (let i = optionNumber; i < existingOptions.length; i++) {
+                await database.pool.query(
+                    'UPDATE role_setup_options SET option_order = $1 WHERE option_id = $2',
+                    [i, existingOptions[i].option_id]
+                );
+            }
+            
+            const embed = new EmbedBuilder()
+                .setTitle('✅ Role Option Removed')
+                .setDescription(`**Setup:** ${setup.setup_name} (ID: ${setupId})`)
+                .addFields(
+                    { name: 'Removed Role Option', value: 
+                      `${optionToRemove.option_emoji || '🎭'} **${optionToRemove.option_label}**\n` +
+                      `**Role:** ${optionToRemove.role_name || 'Unknown'}\n` +
+                      `**Was Position:** ${optionNumber}`, inline: false },
+                    { name: 'Setup Status', value: 
+                      `**Total Options:** ${existingOptions.length - 1}/25\n` +
+                      `**Ready to Deploy:** ${existingOptions.length - 1 > 0 ? 'Yes' : 'No'}`, inline: false }
+                )
+                .setColor('#FF9900')
+                .setTimestamp();
+            
+            await interaction.reply({ embeds: [embed] });
+            
+        } catch (error) {
+            console.error('Error removing role option:', error);
+            await interaction.reply('❌ Error removing role option.');
+        }
+    },
+
+    async setuprolesList(interaction, database) {
+        try {
+            const setups = await database.getAllRoleSetups();
+            
+            if (setups.length === 0) {
+                return await interaction.reply('📋 No role setups found. Create one with `/admin setuproles create <name>`.');
+            }
+            
+            const setupList = setups.map(setup => {
+                const deployStatus = setup.channel_id ? '🟢 Deployed' : '🟡 Not Deployed';
+                const createdDate = new Date(setup.created_at).toLocaleDateString();
+                return `**${setup.setup_name}** (ID: ${setup.setup_id})\n` +
+                       `Created by: ${setup.creator_name || 'Unknown'}\n` +
+                       `Status: ${deployStatus}\n` +
+                       `Created: ${createdDate}`;
+            }).join('\n\n');
+            
+            const embed = new EmbedBuilder()
+                .setTitle('🎭 Role Setup Configurations')
+                .setDescription(setupList)
+                .addFields(
+                    { name: 'Available Commands', value: 
+                      `\`/admin setuproles view <id>\` - View detailed configuration\n` +
+                      `\`/admin setuproles configure <id>\` - Configure appearance\n` +
+                      `\`/admin setuproles addrole <id>\` - Add role options\n` +
+                      `\`/roles preview <id>\` - Preview before deploying\n` +
+                      `\`/roles deploy <id>\` - Deploy to channel`, inline: false }
+                )
+                .setColor('#0099FF')
+                .setFooter({ text: `${setups.length} total setups` })
+                .setTimestamp();
+                
+            await interaction.reply({ embeds: [embed] });
+            
+        } catch (error) {
+            console.error('Error listing role setups:', error);
+            await interaction.reply('❌ Error retrieving role setups.');
+        }
+    },
+
+    async setuprolesDelete(interaction, database) {
+        try {
+            const setupId = interaction.options.getInteger('setup_id');
+            
+            const setup = await database.getRoleSetup(setupId);
+            if (!setup) {
+                return await interaction.reply('❌ Role setup not found.');
+            }
+            
+            // Check permissions
+            if (setup.created_by !== interaction.user.id && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+                return await interaction.reply('❌ You can only delete role setups that you created.');
+            }
+            
+            // If deployed, try to delete the message first
+            if (setup.channel_id && setup.message_id) {
+                try {
+                    const channel = interaction.guild.channels.cache.get(setup.channel_id);
+                    if (channel) {
+                        const message = await channel.messages.fetch(setup.message_id);
+                        if (message) await message.delete();
+                    }
+                } catch (error) {
+                    console.log('Could not delete deployed message:', error.message);
+                }
+            }
+            
+            await database.deleteRoleSetup(setupId);
+            
+            await interaction.reply({
+                content: `✅ **Role setup "${setup.setup_name}" deleted successfully!**\n` +
+                        `${setup.channel_id ? 'Deployed message has also been removed.' : ''}`,
+                ephemeral: true
+            });
+            
+        } catch (error) {
+            console.error('Error deleting role setup:', error);
+            await interaction.reply('❌ Error deleting role setup.');
+        }
+    },
+
+    async setuprolesView(interaction, database) {
+        try {
+            const setupId = interaction.options.getInteger('setup_id');
+            
+            // Get the role setup
+            const setup = await database.getRoleSetup(setupId);
+            if (!setup) {
+                return await interaction.reply('❌ Role setup not found.');
+            }
+            
+            // Get the role options
+            const options = await database.getRoleSetupOptions(setupId);
+            
+            const embed = new EmbedBuilder()
+                .setTitle(`🎭 Role Setup: ${setup.setup_name}`)
+                .setDescription(`**Setup ID:** ${setupId}\n**Created by:** ${setup.creator_name || 'Unknown'}\n**Status:** ${setup.channel_id ? '🟢 Deployed' : '🟡 Not Deployed'}`)
+                .addFields(
+                    { name: 'Embed Configuration', value: 
+                      `**Title:** ${setup.embed_title || 'Role Selection'}\n` +
+                      `**Description:** ${(setup.embed_description || 'Select your roles...').substring(0, 200)}${setup.embed_description?.length > 200 ? '...' : ''}\n` +
+                      `**Color:** ${setup.embed_color || '#0099FF'}\n` +
+                      `**Thumbnail:** ${setup.embed_thumbnail_url ? 'Set' : 'None'}\n` +
+                      `**Image:** ${setup.embed_image_url ? 'Set' : 'None'}\n` +
+                      `**Footer:** ${setup.embed_footer_text || 'None'}`, inline: false }
+                )
+                .setColor(setup.embed_color || '#0099FF')
+                .setTimestamp();
+            
+            if (options.length > 0) {
+                const roleList = options.map((option, index) => 
+                    `**${index + 1}.** ${option.option_emoji || '🎭'} **${option.option_label}**\n` +
+                    `   Role: ${option.role_name || 'Unknown'}\n` +
+                    `   Description: ${option.option_description || 'No description'}`
+                ).join('\n\n');
+                
+                embed.addFields({ name: `Role Options (${options.length}/25)`, value: roleList });
+            } else {
+                embed.addFields({ name: 'Role Options (0/25)', value: 'No role options added yet. Use `/admin setuproles addrole` to add some.' });
+            }
+            
+            if (setup.channel_id) {
+                embed.addFields({ 
+                    name: 'Deployment Info', 
+                    value: `**Channel:** <#${setup.channel_id}>\n**Message ID:** ${setup.message_id || 'Unknown'}` 
+                });
+            }
+            
+            await interaction.reply({ embeds: [embed] });
+            
+        } catch (error) {
+            console.error('Error viewing role setup:', error);
+            await interaction.reply('❌ Error retrieving role setup details.');
+        }
+    },
+
+    // ==================== TRANSACTION METHODS ====================
+
     async createTransaction(interaction, database) {
         try {
             const user = interaction.options.getUser('user');
@@ -197,8 +765,6 @@ module.exports = {
             await database.addUser(user.id, user.username, user.discriminator);
             await database.addUser(interaction.user.id, interaction.user.username, interaction.user.discriminator);
             
-            console.log(`User ${user.username} added/updated in database`);
-            
             const userInfo = await database.getUserInfo(user.id);
             if (userInfo?.is_scammer) {
                 return await interaction.reply({ 
@@ -206,8 +772,6 @@ module.exports = {
                     ephemeral: true 
                 });
             }
-            
-            console.log(`Creating transaction for user ${user.id}: ${itemName} @ $${totalPrice}`);
             
             const transactionId = await database.addTransaction(
                 user.id,
@@ -239,7 +803,7 @@ module.exports = {
                 .addFields(
                     { name: 'Buyer', value: `<@${user.id}>`, inline: true },
                     { name: 'Item', value: itemName, inline: true },
-                    { name: 'Price', value: `$${totalPrice.toFixed(2)}`, inline: true },
+                    { name: 'Price', value: `${totalPrice.toFixed(2)}`, inline: true },
                     { name: 'Status', value: '⏳ Pending', inline: true },
                     { name: 'Created By', value: `<@${interaction.user.id}>`, inline: true }
                 )
@@ -251,8 +815,6 @@ module.exports = {
                 embeds: [embed], 
                 components: [row] 
             });
-            
-            console.log(`Transaction ${transactionId} created successfully by ${interaction.user.username}`);
             
         } catch (error) {
             console.error('Error in createTransaction:', error);
@@ -291,7 +853,7 @@ module.exports = {
                     const username = t.username || 'Unknown';
                     const createdBy = t.creator_username || 'Unknown';
                     return `**ID:** ${t.transaction_id} | **User:** ${username}\n` +
-                           `**Item:** ${t.item_name} | **Amount:** $${parseFloat(t.total_amount).toFixed(2)}\n` +
+                           `**Item:** ${t.item_name} | **Amount:** ${parseFloat(t.total_amount).toFixed(2)}\n` +
                            `**Status:** ${status} ${t.status} | **Created by:** ${createdBy}\n` +
                            `**Date:** ${new Date(t.timestamp).toLocaleDateString()}`;
                 }).join('\n\n'))
@@ -331,7 +893,7 @@ module.exports = {
                     { name: 'Username', value: transaction.username || 'Unknown', inline: true },
                     { name: 'Item', value: transaction.item_name, inline: true },
                     { name: 'Status', value: `${this.getStatusEmoji(transaction.status)} ${transaction.status}`, inline: true },
-                    { name: 'Total Amount', value: `$${parseFloat(transaction.total_amount).toFixed(2)}`, inline: true },
+                    { name: 'Total Amount', value: `${parseFloat(transaction.total_amount).toFixed(2)}`, inline: true },
                     { name: 'Created By', value: transaction.creator_username || 'Unknown', inline: true },
                     { name: 'Date Created', value: new Date(transaction.timestamp).toLocaleDateString(), inline: true },
                     { name: 'Time Created', value: new Date(transaction.timestamp).toLocaleTimeString(), inline: true }
@@ -357,7 +919,7 @@ module.exports = {
             
             const leaderboardText = topSellers.map((seller, index) => {
                 const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-                return `${medal} **${seller.username}** - ${seller.total_sales} sales ($${parseFloat(seller.total_earned).toFixed(2)})`;
+                return `${medal} **${seller.username}** - ${seller.total_sales} sales (${parseFloat(seller.total_earned).toFixed(2)})`;
             }).join('\n');
             
             const embed = new EmbedBuilder()
@@ -374,6 +936,8 @@ module.exports = {
             await interaction.reply('❌ Error retrieving leaderboard data.');
         }
     },
+
+    // ==================== USER MANAGEMENT METHODS ====================
 
     async syncAllMembers(interaction, database) {
         try {
@@ -475,10 +1039,10 @@ module.exports = {
                     { name: 'Join Date', value: userInfo.join_date?.toLocaleDateString() || 'Unknown', inline: true },
                     { name: 'Last Activity', value: userInfo.last_activity?.toLocaleDateString() || 'Unknown', inline: true },
                     { name: 'Total Purchases', value: userInfo.total_purchases.toString(), inline: true },
-                    { name: 'Total Spent', value: `$${parseFloat(userInfo.total_spent).toFixed(2)}`, inline: true },
+                    { name: 'Total Spent', value: `${parseFloat(userInfo.total_spent).toFixed(2)}`, inline: true },
                     { name: 'Is Scammer', value: userInfo.is_scammer ? '⚠️ YES' : '✅ No', inline: true },
                     { name: 'Sales Created', value: sellerStats.total_sales?.toString() || '0', inline: true },
-                    { name: 'Revenue Generated', value: `$${parseFloat(sellerStats.total_earned || 0).toFixed(2)}`, inline: true }
+                    { name: 'Revenue Generated', value: `${parseFloat(sellerStats.total_earned || 0).toFixed(2)}`, inline: true }
                 )
                 .setColor(userInfo.is_scammer ? '#FF0000' : '#00FF00')
                 .setTimestamp();
@@ -510,8 +1074,10 @@ module.exports = {
                     { name: 'Flagged Scammers', value: scammers.length.toString(), inline: true },
                     { name: 'Total Transactions', value: stats.transactions_count?.toString() || '0', inline: true },
                     { name: 'Pending Transactions', value: stats.pending_transactions?.toString() || '0', inline: true },
-                    { name: 'Total Revenue', value: `$${(stats.total_revenue || 0).toFixed(2)}`, inline: true },
-                    { name: 'Sales Revenue', value: `$${(stats.total_sales_revenue || 0).toFixed(2)}`, inline: true }
+                    { name: 'Total Revenue', value: `${(stats.total_revenue || 0).toFixed(2)}`, inline: true },
+                    { name: 'Sales Revenue', value: `${(stats.total_sales_revenue || 0).toFixed(2)}`, inline: true },
+                    { name: 'Server Roles', value: stats.server_roles_count?.toString() || '0', inline: true },
+                    { name: 'Role Setups', value: stats.role_setups_count?.toString() || '0', inline: true }
                 )
                 .setColor('#0099FF')
                 .setTimestamp();
@@ -522,6 +1088,142 @@ module.exports = {
             await interaction.reply('❌ Error retrieving statistics.');
         }
     },
+
+    // ==================== ROLE MANAGEMENT METHODS ====================
+
+    async syncAllRoles(interaction, database) {
+        try {
+            await interaction.deferReply();
+            
+            const guild = interaction.guild;
+            const roles = guild.roles.cache;
+            
+            let addedCount = 0;
+            let updatedCount = 0;
+            let errorCount = 0;
+
+            const totalRoles = roles.size;
+            
+            for (const [roleId, role] of roles) {
+                try {
+                    const existingRoles = await database.getAllServerRoles();
+                    const existingRole = existingRoles.find(r => r.role_id === role.id);
+                    
+                    await database.addServerRole(
+                        role.id,
+                        role.name,
+                        role.color,
+                        role.position,
+                        role.permissions.bitfield.toString(),
+                        role.hoist,
+                        role.mentionable,
+                        role.managed
+                    );
+                    
+                    if (existingRole) {
+                        updatedCount++;
+                    } else {
+                        addedCount++;
+                    }
+                    
+                } catch (error) {
+                    console.error(`Error processing role ${role.name}:`, error);
+                    errorCount++;
+                }
+            }
+
+            const embed = new EmbedBuilder()
+                .setTitle('✅ Role Sync Complete!')
+                .setDescription('All Discord server roles have been synchronized with the database.')
+                .addFields(
+                    { name: 'Total Roles Processed', value: totalRoles.toString(), inline: true },
+                    { name: 'New Roles Added', value: addedCount.toString(), inline: true },
+                    { name: 'Existing Roles Updated', value: updatedCount.toString(), inline: true },
+                    { name: 'Errors', value: errorCount.toString(), inline: true }
+                )
+                .setColor('#00FF00')
+                .setTimestamp();
+
+            await interaction.editReply({ embeds: [embed] });
+
+        } catch (error) {
+            console.error('Error in syncAllRoles:', error);
+            const errorMessage = 'An error occurred during role sync.';
+            if (interaction.deferred) {
+                await interaction.editReply(errorMessage);
+            } else {
+                await interaction.reply(errorMessage);
+            }
+        }
+    },
+
+    async listRoles(interaction, database) {
+        try {
+            const roles = await database.getAssignableRoles();
+            
+            if (roles.length === 0) {
+                return await interaction.reply('📋 No assignable roles found. Try running /admin syncroles first.');
+            }
+            
+            const roleList = roles.slice(0, 20).map((role, index) => {
+                const colorHex = role.role_color ? `#${role.role_color.toString(16).padStart(6, '0')}` : 'Default';
+                return `**${index + 1}.** ${role.role_name} (ID: ${role.role_id})\n` +
+                       `   Position: ${role.role_position} | Color: ${colorHex}`;
+            }).join('\n\n');
+            
+            const embed = new EmbedBuilder()
+                .setTitle('🎭 Server Roles')
+                .setDescription(roleList)
+                .setColor('#0099FF')
+                .setFooter({ text: `Showing ${Math.min(roles.length, 20)} of ${roles.length} assignable roles` })
+                .setTimestamp();
+                
+            if (roles.length > 20) {
+                embed.addFields({ 
+                    name: 'Note', 
+                    value: `${roles.length - 20} more roles not shown. Excluded: @everyone, bot roles, and managed roles.` 
+                });
+            }
+                
+            await interaction.reply({ embeds: [embed] });
+            
+        } catch (error) {
+            console.error('Error listing roles:', error);
+            await interaction.reply('❌ Error retrieving roles list.');
+        }
+    },
+
+    async setAutoRole(interaction, database) {
+        try {
+            const role = interaction.options.getRole('role');
+            
+            if (!role) {
+                await database.setAutoRole(null);
+                return await interaction.reply('✅ Auto-role assignment disabled. New members will not receive any role automatically.');
+            }
+            
+            await database.setAutoRole(role.name);
+            
+            const embed = new EmbedBuilder()
+                .setTitle('✅ Auto-Role Updated')
+                .setDescription(`New members will automatically receive the **${role.name}** role when they join the server.`)
+                .addFields(
+                    { name: 'Role', value: role.name, inline: true },
+                    { name: 'Role ID', value: role.id, inline: true },
+                    { name: 'Members with Role', value: role.members.size.toString(), inline: true }
+                )
+                .setColor(role.color || '#0099FF')
+                .setTimestamp();
+            
+            await interaction.reply({ embeds: [embed] });
+            
+        } catch (error) {
+            console.error('Error setting auto role:', error);
+            await interaction.reply('❌ Error setting auto role.');
+        }
+    },
+
+    // ==================== SCAMMER MANAGEMENT METHODS ====================
 
     async flagScammer(interaction, database) {
         const user = interaction.options.getUser('user');
@@ -582,6 +1284,8 @@ module.exports = {
         }
     },
 
+    // ==================== BOT CONFIGURATION METHODS ====================
+
     async setWelcomeMessage(interaction, database) {
         const message = interaction.options.getString('message');
         
@@ -627,6 +1331,8 @@ module.exports = {
         }
     },
 
+    // ==================== SYSTEM METHODS ====================
+
     async manualBackup(interaction, database) {
         try {
             await interaction.deferReply();
@@ -654,8 +1360,12 @@ module.exports = {
                     { name: 'Users', value: `${stats.users_count || 0}`, inline: true },
                     { name: 'Transactions', value: `${stats.transactions_count || 0}`, inline: true },
                     { name: 'Messages', value: `${stats.messages_count || 0}`, inline: true },
-                    { name: 'Purchase Revenue', value: `$${(stats.total_revenue || 0).toFixed(2)}`, inline: true },
-                    { name: 'Sales Revenue', value: `$${(stats.total_sales_revenue || 0).toFixed(2)}`, inline: true }
+                    { name: 'Server Roles', value: `${stats.server_roles_count || 0}`, inline: true },
+                    { name: 'Role Setups', value: `${stats.role_setups_count || 0}`, inline: true },
+                    { name: 'Scammers', value: `${stats.scammer_count || 0}`, inline: true },
+                    { name: 'Purchase Revenue', value: `${(stats.total_revenue || 0).toFixed(2)}`, inline: true },
+                    { name: 'Sales Revenue', value: `${(stats.total_sales_revenue || 0).toFixed(2)}`, inline: true },
+                    { name: 'Pending Transactions', value: `${stats.pending_transactions || 0}`, inline: true }
                 )
                 .setColor('#00FF99')
                 .setTimestamp();
@@ -708,6 +1418,8 @@ module.exports = {
             await interaction.editReply('❌ Error during cleanup.');
         }
     },
+
+    // ==================== UTILITY METHODS ====================
 
     getStatusEmoji(status) {
         switch (status.toLowerCase()) {
