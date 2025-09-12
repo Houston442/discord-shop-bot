@@ -1,336 +1,153 @@
-// commands/help.js - Complete Updated Help with Role Management System
+// commands/help.js - Fixed version within Discord limits
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('help')
-        .setDescription('Display all available bot commands and their usage'),
+        .setDescription('Display available bot commands and their usage')
+        .addStringOption(option =>
+            option.setName('category')
+                .setDescription('Specific command category to view')
+                .setRequired(false)
+                .addChoices(
+                    { name: 'Transactions', value: 'transactions' },
+                    { name: 'Role Management', value: 'roles' },
+                    { name: 'User Management', value: 'users' },
+                    { name: 'Admin Tools', value: 'admin' },
+                    { name: 'System', value: 'system' }
+                )),
     
     async execute(interaction, database) {
         try {
-            const embed = new EmbedBuilder()
-                .setTitle('🤖 Discord Shop Bot - Complete Command Guide')
-                .setDescription('All available admin commands and their usage:')
-                .addFields(
-                    // Transaction Commands Section
-                    { 
-                        name: '💰 **TRANSACTION COMMANDS** (Admin Only)', 
-                        value: '```' +
-                        '/admin buy @user <item> <price>\n' +
-                        '/admin history [user]\n' +
-                        '/admin status <transaction_id>\n' +
-                        '/admin leaderboard\n' +
-                        '```', 
-                        inline: false 
-                    },
-                    { 
-                        name: '📝 Transaction Command Details', 
-                        value: 
-                        '**`/admin buy`** - Create a new transaction for a user with Complete/Cancel buttons\n' +
-                        '   • Creates transaction that can be completed or cancelled via buttons\n' +
-                        '   • Automatically checks if user is flagged as scammer\n' +
-                        '   • Buttons update transaction status immediately\n' +
-                        '**`/admin history`** - View all recent transactions or for specific user\n' +
-                        '**`/admin status`** - Check detailed status of a specific transaction\n' +
-                        '**`/admin leaderboard`** - Show top sellers based on completed transactions\n',
-                        inline: false 
-                    },
-
-                    // User Management Section
-                    { 
-                        name: '👥 **USER MANAGEMENT COMMANDS** (Admin Only)', 
-                        value: '```' +
-                        '/admin syncmembers\n' +
-                        '/admin checkuser @user\n' +
-                        '/admin stats\n' +
-                        '```', 
-                        inline: false 
-                    },
-                    { 
-                        name: '📝 User Management Details', 
-                        value: 
-                        '**`/admin syncmembers`** - Add all Discord server members to database\n' +
-                        '**`/admin checkuser`** - View detailed user info, transactions, and activity\n' +
-                        '   • Shows both buyer and seller statistics\n' +
-                        '**`/admin stats`** - Show server statistics and database overview\n',
-                        inline: false 
-                    },
-
-                    // Role Management Section
-                    { 
-                        name: '🎭 **ROLE MANAGEMENT COMMANDS** (Admin Only)', 
-                        value: '```' +
-                        '/admin syncroles\n' +
-                        '/admin listroles\n' +
-                        '/admin setautorole [role]\n' +
-                        '/admin createsetup <name>\n' +
-                        '/admin listsetups\n' +
-                        '/admin deletesetup <setup_id>\n' +
-                        '```', 
-                        inline: false 
-                    },
-                    { 
-                        name: '📝 Role Management Details', 
-                        value: 
-                        '**`/admin syncroles`** - Sync all Discord server roles to database\n' +
-                        '   • Automatically happens when roles are created/updated/deleted\n' +
-                        '**`/admin listroles`** - List all assignable server roles\n' +
-                        '**`/admin setautorole`** - Set role auto-assigned to new members\n' +
-                        '   • Default: "Tesco Clubcard" role\n' +
-                        '**`/admin createsetup`** - Create custom role selection menu\n' +
-                        '   • Interactive setup process with embed customization\n' +
-                        '**`/admin listsetups`** - View all role setup configurations\n' +
-                        '**`/admin deletesetup`** - Delete a role setup configuration\n',
-                        inline: false 
-                    },
-
-                    // Role Deployment Section
-                    { 
-                        name: '🚀 **ROLE DEPLOYMENT COMMANDS** (Admin Only)', 
-                        value: '```' +
-                        '/roles deploy <setup_id> [channel]\n' +
-                        '/roles preview <setup_id>\n' +
-                        '/roles undeploy <setup_id>\n' +
-                        '```', 
-                        inline: false 
-                    },
-                    { 
-                        name: '📝 Role Deployment Details', 
-                        value: 
-                        '**`/roles deploy`** - Deploy a role setup to a channel\n' +
-                        '   • Creates interactive role selection menu\n' +
-                        '   • Users can select/deselect roles from dropdown\n' +
-                        '**`/roles preview`** - Preview a role setup before deploying\n' +
-                        '**`/roles undeploy`** - Remove a deployed role menu\n',
-                        inline: false 
-                    },
-
-                    // Scammer Management Section
-                    { 
-                        name: '🚨 **SCAMMER MANAGEMENT COMMANDS** (Admin Only)', 
-                        value: '```' +
-                        '/admin flagscammer @user [reason]\n' +
-                        '/admin unflagscammer @user\n' +
-                        '/admin scammerlist\n' +
-                        '```', 
-                        inline: false 
-                    },
-                    { 
-                        name: '📝 Scammer Management Details', 
-                        value: 
-                        '**`/admin flagscammer`** - Flag user as scammer with optional reason\n' +
-                        '   • Flagged users cannot make new transactions\n' +
-                        '**`/admin unflagscammer`** - Remove scammer flag from user\n' +
-                        '**`/admin scammerlist`** - Display all flagged scammers with notes\n',
-                        inline: false 
-                    },
-
-                    // Message Commands Section
-                    { 
-                        name: '📝 **MESSAGE COMMANDS** (Admin Only)', 
-                        value: '```' +
-                        '/message send <content>\n' +
-                        '/message edit <message_id> <content>\n' +
-                        '/message embed <title> <description> [color]\n' +
-                        '/message channel #channel <content>\n' +
-                        '/message dm @user <content>\n' +
-                        '/message announce <everyone|here> <content>\n' +
-                        '```', 
-                        inline: false 
-                    },
-                    { 
-                        name: '📝 Message Command Details', 
-                        value: 
-                        '**`/message send`** - Send message in current channel with emoji support\n' +
-                        '**`/message edit`** - Edit existing bot message by ID\n' +
-                        '**`/message embed`** - Send rich embedded message with custom color\n' +
-                        '**`/message channel`** - Send message to specific channel\n' +
-                        '**`/message dm`** - Send direct message to user\n' +
-                        '**`/message announce`** - Send announcement with @everyone/@here\n',
-                        inline: false 
-                    },
-
-                    // Bot Configuration Section
-                    { 
-                        name: '⚙️ **BOT CONFIGURATION COMMANDS** (Admin Only)', 
-                        value: '```' +
-                        '/admin setwelcome <message>\n' +
-                        '/admin setpersistent #channel <message>\n' +
-                        '/admin removepersistent #channel\n' +
-                        '```', 
-                        inline: false 
-                    },
-                    { 
-                        name: '📝 Bot Configuration Details', 
-                        value: 
-                        '**`/admin setwelcome`** - Set welcome DM message for new members\n' +
-                        '**`/admin setpersistent`** - Set message that always stays last in channel\n' +
-                        '**`/admin removepersistent`** - Remove persistent message from channel\n',
-                        inline: false 
-                    },
-
-                    // Database & System Section
-                    { 
-                        name: '💾 **DATABASE & SYSTEM COMMANDS** (Admin Only)', 
-                        value: '```' +
-                        '/admin backup\n' +
-                        '/admin dbstats\n' +
-                        '/admin testdb\n' +
-                        '/admin cleanup\n' +
-                        '```', 
-                        inline: false 
-                    },
-                    { 
-                        name: '📝 Database & System Details', 
-                        value: 
-                        '**`/admin backup`** - Manually trigger database backup\n' +
-                        '**`/admin dbstats`** - Show detailed database statistics\n' +
-                        '**`/admin testdb`** - Test database connection and response time\n' +
-                        '**`/admin cleanup`** - Clean old messages/data (30+ days)\n',
-                        inline: false 
-                    },
-
-                    // Role Setup Workflow Section
-                    { 
-                        name: '🎨 **ROLE SETUP CREATION WORKFLOW**', 
-                        value: 
-                        '**Step 1:** Use `/admin createsetup <name>` to start interactive setup\n' +
-                        '**Step 2:** Configure embed appearance (title, description, thumbnail, image, color, footer)\n' +
-                        '**Step 3:** Add role options with format: `[Label] | [Description] | [Emoji] | [Role Name]`\n' +
-                        '**Step 4:** Preview with `/roles preview <setup_id>`\n' +
-                        '**Step 5:** Deploy with `/roles deploy <setup_id> [channel]`\n\n' +
-                        '**Interactive Setup Features:**\n' +
-                        '• Fully customizable embed appearance\n' +
-                        '• Up to 25 role options per setup\n' +
-                        '• Custom emojis and descriptions for each role\n' +
-                        '• Real-time preview before deployment\n' +
-                        '• Multiple setups can be created and deployed\n',
-                        inline: false 
-                    },
-
-                    // Transaction Workflow Section
-                    { 
-                        name: '🔄 **TRANSACTION WORKFLOW**', 
-                        value: 
-                        '**Step 1:** Use `/admin buy @user item_name price` to create transaction\n' +
-                        '**Step 2:** Transaction message appears with Complete ✅ and Cancel ❌ buttons\n' +
-                        '**Step 3:** Click appropriate button to update transaction status\n' +
-                        '**Step 4:** Stats are updated only when transaction is completed\n\n' +
-                        '**Button Actions:**\n' +
-                        '• ✅ **Complete** - Marks transaction as completed (updates buyer/seller stats)\n' +
-                        '• ❌ **Cancel** - Marks transaction as cancelled (no stat changes)\n' +
-                        '• Buttons disappear after use and embed updates with new status\n' +
-                        '• Seller performance tracked automatically for leaderboards\n',
-                        inline: false 
-                    },
-
-                    // Auto-Role System Section
-                    { 
-                        name: '🤖 **AUTOMATIC SYSTEMS**', 
-                        value: 
-                        '**Auto-Role Assignment:**\n' +
-                        '• New members automatically get "Tesco Clubcard" role\n' +
-                        '• Configurable with `/admin setautorole`\n\n' +
-                        '**Role Syncing:**\n' +
-                        '• Server roles automatically sync to database when created/updated/deleted\n' +
-                        '• Manual sync available with `/admin syncroles`\n\n' +
-                        '**Member Syncing:**\n' +
-                        '• Use `/admin syncmembers` to sync all server members to database\n' +
-                        '• Automatic tracking when members interact with bot\n\n' +
-                        '**Daily Backups:**\n' +
-                        '• Automatic database backup every day at midnight GMT\n' +
-                        '• Manual backups with `/admin backup`\n',
-                        inline: false 
-                    },
-
-                    // Custom Emoji Support Section
-                    { 
-                        name: '😀 **CUSTOM EMOJI SUPPORT**', 
-                        value: 
-                        '**Server Emojis:** Use `:emoji_name:` format in message commands\n' +
-                        '   • Example: `:shop_icon:`, `:verified:`, `:diamond:`, `:warning_sign:`\n' +
-                        '   • Works in: welcome messages, persistent messages, all message commands\n' +
-                        '   • Works in: role setup descriptions and options\n\n' +
-                        '**Unicode Emojis:** Work normally everywhere\n' +
-                        '   • Example: 🛒 💎 ⚠️ ✅ ❌ 🔔 🎉 ❤️ 🔥 ⭐ 💰 🛡️\n',
-                        inline: false 
-                    },
-
-                    // Quick Examples Section
-                    { 
-                        name: '💡 **QUICK EXAMPLES**', 
-                        value: 
-                        '```\n' +
-                        '# Create a transaction\n' +
-                        '/admin buy @JohnDoe Dragon Sword 25.99\n\n' +
-                        '# Create a role setup\n' +
-                        '/admin createsetup "Ping Roles"\n' +
-                        '# Then follow interactive prompts\n\n' +
-                        '# Set auto-role for new members\n' +
-                        '/admin setautorole @Tesco Clubcard\n\n' +
-                        '# Deploy a role menu\n' +
-                        '/roles deploy 1 #role-selection\n\n' +
-                        '# Send message with custom emoji\n' +
-                        '/message send Welcome! :shop_icon: Check our deals\n\n' +
-                        '# Flag a scammer\n' +
-                        '/admin flagscammer @user Attempted to scam members\n' +
-                        '```',
-                        inline: false 
-                    },
-
-                    // Permission Notes Section
-                    { 
-                        name: '🔐 **PERMISSION REQUIREMENTS**', 
-                        value: 
-                        '**Everyone:** `/help` command only\n' +
-                        '**Admin Only:** All other commands require Discord Administrator permission\n' +
-                        '**Auto-Role:** "Tesco Clubcard" role assigned automatically to new members\n' +
-                        '**Role Selection:** Members can use deployed role menus to self-assign roles\n',
-                        inline: false 
-                    },
-
-                    // Important Changes Section
-                    { 
-                        name: '⚠️ **KEY FEATURES**', 
-                        value: 
-                        '• **Dynamic Role System** - Roles sync automatically with Discord server\n' +
-                        '• **Custom Role Menus** - Fully customizable role selection interfaces\n' +
-                        '• **Seller Tracking** - Performance metrics for transaction creators\n' +
-                        '• **Scammer Protection** - Automatic blocking of flagged users\n' +
-                        '• **Auto-Role Assignment** - New members get default role automatically\n' +
-                        '• **Button-Based Transactions** - Simple complete/cancel workflow\n' +
-                        '• **Interactive Setup** - Guided role menu creation process\n' +
-                        '• **Multiple Deployments** - Create and deploy multiple role menus\n',
-                        inline: false 
-                    },
-
-                    // Help Footer
-                    { 
-                        name: '❓ **NEED MORE HELP?**', 
-                        value: 
-                        '• Use Discord\'s auto-complete by typing `/` and selecting commands\n' +
-                        '• Required parameters are marked as such in Discord\n' +
-                        '• Optional parameters are shown in [brackets] above\n' +
-                        '• All admin commands require Administrator permission\n' +
-                        '• Role setup creation is interactive - follow the prompts!\n' +
-                        '• Contact server administrators for additional support\n',
-                        inline: false 
-                    }
-                )
-                .setColor('#0099FF')
-                .setFooter({ 
-                    text: 'Discord Shop Bot | Advanced Role Management | Type / to see available commands' 
-                })
-                .setTimestamp();
-                
-            await interaction.reply({ embeds: [embed], ephemeral: true });
+            const category = interaction.options.getString('category');
+            
+            if (category) {
+                await this.showCategoryHelp(interaction, category);
+            } else {
+                await this.showGeneralHelp(interaction);
+            }
             
         } catch (error) {
             console.error('Error in help command:', error);
             await interaction.reply({ 
-                content: '❌ Error displaying help information.',
+                content: 'Error displaying help information.',
                 ephemeral: true 
             });
         }
+    },
+
+    async showGeneralHelp(interaction) {
+        const embed = new EmbedBuilder()
+            .setTitle('🤖 Discord Shop Bot - Help Overview')
+            .setDescription('**Available Command Categories:**')
+            .addFields(
+                { 
+                    name: '💰 Transactions', 
+                    value: '`/admin buy` `/admin history` `/admin status` `/admin leaderboard`\nManage purchases and sales', 
+                    inline: true 
+                },
+                { 
+                    name: '🎭 Role Management', 
+                    value: '`/admin setuproles` `/roles deploy` `/admin syncroles`\nCreate and deploy role menus', 
+                    inline: true 
+                },
+                { 
+                    name: '👥 User Management', 
+                    value: '`/admin checkuser` `/admin syncmembers` `/admin stats`\nManage users and scammers', 
+                    inline: true 
+                },
+                { 
+                    name: '📝 Admin Tools', 
+                    value: '`/message` `/admin setwelcome` `/admin flagscammer`\nBot configuration and messaging', 
+                    inline: true 
+                },
+                { 
+                    name: '💾 System', 
+                    value: '`/admin backup` `/admin dbstats` `/admin testdb`\nDatabase and system management', 
+                    inline: true 
+                },
+                { 
+                    name: 'Quick Start', 
+                    value: '**For detailed help:** `/help category:<category_name>`\n**Role Setup:** `/admin setuproles create` → `/admin setuproles configure` → `/admin setuproles addrole` → `/roles deploy`', 
+                    inline: false 
+                }
+            )
+            .setColor('#0099FF')
+            .setFooter({ text: 'Use /help category:<name> for detailed command info' })
+            .setTimestamp();
+            
+        await interaction.reply({ embeds: [embed] });
+    },
+
+    async showCategoryHelp(interaction, category) {
+        let embed;
+        
+        switch (category) {
+            case 'transactions':
+                embed = new EmbedBuilder()
+                    .setTitle('💰 Transaction Commands')
+                    .addFields(
+                        { name: '/admin buy', value: 'Create new transaction for user\n`/admin buy @user item_name price`', inline: false },
+                        { name: '/admin history', value: 'View transaction history\n`/admin history [@user]`', inline: false },
+                        { name: '/admin status', value: 'Check transaction status\n`/admin status transaction_id`', inline: false },
+                        { name: '/admin leaderboard', value: 'Show top sellers leaderboard', inline: false },
+                        { name: 'How it works', value: 'Transactions start as pending → use ✅/❌ buttons to complete/cancel → stats update automatically', inline: false }
+                    )
+                    .setColor('#FFD700');
+                break;
+                
+            case 'roles':
+                embed = new EmbedBuilder()
+                    .setTitle('🎭 Role Management Commands')
+                    .addFields(
+                        { name: 'Setup Creation', value: '`/admin setuproles create name` - Create new role menu\n`/admin setuproles configure setup_id` - Configure appearance\n`/admin setuproles addrole setup_id @role label` - Add role options', inline: false },
+                        { name: 'Deployment', value: '`/roles preview setup_id` - Preview before deploying\n`/roles deploy setup_id [#channel]` - Deploy to channel\n`/roles undeploy setup_id` - Remove deployed menu', inline: false },
+                        { name: 'Management', value: '`/admin setuproles list` - List all setups\n`/admin setuproles view setup_id` - View detailed config\n`/admin setuproles delete setup_id` - Delete setup', inline: false },
+                        { name: 'Basic Role Commands', value: '`/admin syncroles` - Sync Discord roles to database\n`/admin listroles` - List assignable roles\n`/admin setautorole [@role]` - Set auto-role for new members', inline: false }
+                    )
+                    .setColor('#9932CC');
+                break;
+                
+            case 'users':
+                embed = new EmbedBuilder()
+                    .setTitle('👥 User Management Commands')
+                    .addFields(
+                        { name: 'User Info', value: '`/admin checkuser @user` - View detailed user information\n`/admin syncmembers` - Add all server members to database\n`/admin stats` - Show server statistics', inline: false },
+                        { name: 'Scammer Management', value: '`/admin flagscammer @user [reason]` - Flag user as scammer\n`/admin unflagscammer @user` - Remove scammer flag\n`/admin scammerlist` - List all flagged scammers', inline: false },
+                        { name: 'Features', value: 'Flagged scammers cannot make transactions\nUser activity and transaction history tracked\nBuyer and seller statistics maintained', inline: false }
+                    )
+                    .setColor('#FF6347');
+                break;
+                
+            case 'admin':
+                embed = new EmbedBuilder()
+                    .setTitle('📝 Admin Tools & Configuration')
+                    .addFields(
+                        { name: 'Messaging', value: '`/message send content` - Send message in channel\n`/message embed title description` - Send rich embed\n`/message dm @user content` - Send direct message\n`/message announce everyone/here content` - Send announcement', inline: false },
+                        { name: 'Bot Configuration', value: '`/admin setwelcome message` - Set welcome DM for new members\n`/admin setpersistent #channel message` - Set persistent message\n`/admin removepersistent #channel` - Remove persistent message', inline: false },
+                        { name: 'Features', value: 'Custom emoji support in messages\nWelcome DMs sent automatically\nPersistent messages stay at bottom of channel', inline: false }
+                    )
+                    .setColor('#32CD32');
+                break;
+                
+            case 'system':
+                embed = new EmbedBuilder()
+                    .setTitle('💾 System & Database Commands')
+                    .addFields(
+                        { name: 'Database Management', value: '`/admin backup` - Manual database backup\n`/admin dbstats` - Detailed database statistics\n`/admin testdb` - Test database connection\n`/admin cleanup` - Clean old data (30+ days)', inline: false },
+                        { name: 'Automated Features', value: 'Daily backups at midnight GMT\nAutomatic role syncing when roles change\nReal-time activity tracking\nTransaction statistics updates', inline: false },
+                        { name: 'Backup Info', value: 'Backups sent to Discord channel\nIncludes all user data, transactions, and configurations\nFile attachments with detailed statistics', inline: false }
+                    )
+                    .setColor('#1E90FF');
+                break;
+                
+            default:
+                return await this.showGeneralHelp(interaction);
+        }
+        
+        embed.setFooter({ text: 'All admin commands require Administrator permission' })
+             .setTimestamp();
+             
+        await interaction.reply({ embeds: [embed] });
     }
 };
