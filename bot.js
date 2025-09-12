@@ -327,37 +327,84 @@ class ShopBot {
                     return;
                 }
                 
-                await this.backupManager.performBackup();
+                // Get backup data
+                const backupData = await this.database.getBackupData();
+                backupData.timestamp = new Date().toISOString();
+                backupData.triggered_by = 'Automated Daily Backup';
+                backupData.type = 'automatic';
+                
+                // Create backup file
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const backupFileName = `daily_backup_${timestamp}.json`;
+                const backupJson = JSON.stringify(backupData, null, 2);
+                
                 console.log('=== DAILY BACKUP COMPLETED SUCCESSFULLY ===');
                 
-                // Send success notification to Discord
+                // Send success notification with file attachment
                 try {
                     const backupChannelId = process.env.BACKUP_CHANNEL_ID;
                     if (backupChannelId) {
                         const channel = this.client.channels.cache.get(backupChannelId);
                         if (channel) {
                             const stats = await this.database.getDatabaseStats();
-                            await channel.send(`✅ **Daily backup completed successfully**\n` +
-                                             `Time: ${new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' })}\n` +
-                                             `Users: ${stats.users_count || 0} | Transactions: ${stats.transactions_count || 0} | Revenue: $${(stats.total_revenue || 0).toFixed(2)}`);
+                            
+                            // Create temporary file
+                            const fs = require('fs');
+                            const path = require('path');
+                            const tempDir = './temp_backups';
+                            
+                            // Ensure temp directory exists
+                            if (!fs.existsSync(tempDir)) {
+                                fs.mkdirSync(tempDir, { recursive: true });
+                            }
+                            
+                            const filePath = path.join(tempDir, backupFileName);
+                            fs.writeFileSync(filePath, backupJson);
+                            
+                            // Calculate file size
+                            const fileStat = fs.statSync(filePath);
+                            const fileSizeMB = (fileStat.size / (1024 * 1024)).toFixed(2);
+                            
+                            // Send message with file attachment
+                            await channel.send({
+                                content: `✅ **Daily backup completed successfully**\n` +
+                                        `Time: ${new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' })}\n` +
+                                        `Users: ${stats.users_count || 0} | Transactions: ${stats.transactions_count || 0} | Revenue: $${(stats.total_revenue || 0).toFixed(2)}\n` +
+                                        `File Size: ${fileSizeMB} MB`,
+                                files: [{
+                                    attachment: filePath,
+                                    name: backupFileName
+                                }]
+                            });
+                            
+                            // Clean up temporary file after sending
+                            fs.unlinkSync(filePath);
+                            
+                            console.log(`Backup file ${backupFileName} sent to Discord and cleaned up`);
+                        } else {
+                            console.log('Backup channel not found');
                         }
+                    } else {
+                        console.log('No backup channel configured (BACKUP_CHANNEL_ID not set)');
                     }
                 } catch (notifyError) {
-                    console.error('Failed to send backup success notification:', notifyError);
+                    console.error('Failed to send backup notification with file:', notifyError);
                 }
                 
             } catch (error) {
                 console.error('=== DAILY BACKUP FAILED ===', error);
                 
-                // Send failure notification to Discord
+                // Send failure notification
                 try {
                     const backupChannelId = process.env.BACKUP_CHANNEL_ID;
                     if (backupChannelId) {
                         const channel = this.client.channels.cache.get(backupChannelId);
                         if (channel) {
-                            await channel.send(`❌ **Automated backup failed**\n` +
-                                             `Time: ${new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' })}\n` +
-                                             `Error: ${error.message}`);
+                            await channel.send({
+                                content: `❌ **Automated backup failed**\n` +
+                                        `Time: ${new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' })}\n` +
+                                        `Error: ${error.message}`
+                            });
                         }
                     }
                 } catch (notifyError) {
