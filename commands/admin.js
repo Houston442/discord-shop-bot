@@ -1,5 +1,5 @@
-// commands/admin.js - With Creator Monitoring Removed
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+// commands/admin.js - All Admin Commands (Updated Structure)
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 
@@ -8,6 +8,41 @@ module.exports = {
         .setName('admin')
         .setDescription('Admin commands for bot management')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+        // Transaction Commands
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('buy')
+                .setDescription('Create a new transaction for a user')
+                .addUserOption(option =>
+                    option.setName('user')
+                        .setDescription('User making the purchase')
+                        .setRequired(true))
+                .addStringOption(option =>
+                    option.setName('item')
+                        .setDescription('Name of the item being purchased')
+                        .setRequired(true))
+                .addNumberOption(option =>
+                    option.setName('price')
+                        .setDescription('Total price of the transaction')
+                        .setRequired(true)
+                        .setMinValue(0.01)))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('history')
+                .setDescription('View transaction history')
+                .addUserOption(option =>
+                    option.setName('user')
+                        .setDescription('View transactions for specific user (optional)')
+                        .setRequired(false)))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('status')
+                .setDescription('Check specific transaction status')
+                .addIntegerOption(option =>
+                    option.setName('transaction_id')
+                        .setDescription('Transaction ID to check')
+                        .setRequired(true)))
+        // User Management Commands
         .addSubcommand(subcommand =>
             subcommand
                 .setName('syncmembers')
@@ -24,6 +59,7 @@ module.exports = {
             subcommand
                 .setName('stats')
                 .setDescription('Show server statistics and database overview'))
+        // Scammer Management Commands
         .addSubcommand(subcommand =>
             subcommand
                 .setName('flagscammer')
@@ -48,33 +84,7 @@ module.exports = {
             subcommand
                 .setName('scammerlist')
                 .setDescription('Display all flagged scammers with notes'))
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('updatetransaction')
-                .setDescription('Update transaction status')
-                .addIntegerOption(option =>
-                    option.setName('transaction_id')
-                        .setDescription('Transaction ID to update')
-                        .setRequired(true))
-                .addStringOption(option =>
-                    option.setName('status')
-                        .setDescription('New status for the transaction')
-                        .setRequired(true)
-                        .addChoices(
-                            { name: 'Pending', value: 'pending' },
-                            { name: 'Completed', value: 'completed' },
-                            { name: 'Failed', value: 'failed' },
-                            { name: 'Disputed', value: 'disputed' },
-                            { name: 'Cancelled', value: 'cancelled' }
-                        )))
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('alltransactions')
-                .setDescription('View all recent transactions'))
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('pendingtransactions')
-                .setDescription('View only pending transactions'))
+        // Bot Configuration Commands
         .addSubcommand(subcommand =>
             subcommand
                 .setName('setwelcome')
@@ -103,6 +113,7 @@ module.exports = {
                     option.setName('channel')
                         .setDescription('Channel to remove persistent message from')
                         .setRequired(true)))
+        // System Commands
         .addSubcommand(subcommand =>
             subcommand
                 .setName('backup')
@@ -124,6 +135,17 @@ module.exports = {
         const subcommand = interaction.options.getSubcommand();
         
         switch (subcommand) {
+            // Transaction Commands
+            case 'buy':
+                await this.createTransaction(interaction, database);
+                break;
+            case 'history':
+                await this.showHistory(interaction, database);
+                break;
+            case 'status':
+                await this.checkTransactionStatus(interaction, database);
+                break;
+            // User Management Commands
             case 'syncmembers':
                 await this.syncAllMembers(interaction, database);
                 break;
@@ -133,6 +155,7 @@ module.exports = {
             case 'stats':
                 await this.showStats(interaction, database);
                 break;
+            // Scammer Management Commands
             case 'flagscammer':
                 await this.flagScammer(interaction, database);
                 break;
@@ -142,15 +165,7 @@ module.exports = {
             case 'scammerlist':
                 await this.listScammers(interaction, database);
                 break;
-            case 'updatetransaction':
-                await this.updateTransaction(interaction, database);
-                break;
-            case 'alltransactions':
-                await this.showAllTransactions(interaction, database);
-                break;
-            case 'pendingtransactions':
-                await this.showPendingTransactions(interaction, database);
-                break;
+            // Bot Configuration Commands
             case 'setwelcome':
                 await this.setWelcomeMessage(interaction, database);
                 break;
@@ -160,6 +175,7 @@ module.exports = {
             case 'removepersistent':
                 await this.removePersistentChannel(interaction, database);
                 break;
+            // System Commands
             case 'backup':
                 await this.manualBackup(interaction, database);
                 break;
@@ -174,6 +190,168 @@ module.exports = {
                 break;
         }
     },
+
+    // ==================== TRANSACTION METHODS ====================
+
+    async createTransaction(interaction, database) {
+        try {
+            const user = interaction.options.getUser('user');
+            const itemName = interaction.options.getString('item');
+            const totalPrice = interaction.options.getNumber('price');
+            
+            // Ensure user exists in database
+            await database.addUser(user.id, user.username, user.discriminator);
+            console.log(`User ${user.username} added/updated in database`);
+            
+            // Check if user is flagged as scammer
+            const userInfo = await database.getUserInfo(user.id);
+            if (userInfo?.is_scammer) {
+                return await interaction.reply({ 
+                    content: `❌ User <@${user.id}> is flagged as a scammer and cannot make transactions.`,
+                    ephemeral: true 
+                });
+            }
+            
+            console.log(`Creating transaction for user ${user.id}: ${itemName} @ $${totalPrice}`);
+            
+            const transactionId = await database.addTransaction(
+                user.id,
+                itemName,
+                1, // Quantity is always 1 in simplified system
+                totalPrice, // Unit price = total price
+                totalPrice
+            );
+            
+            // Create action buttons
+            const completeButton = new ButtonBuilder()
+                .setCustomId(`transaction_complete_${transactionId}`)
+                .setLabel('Complete')
+                .setStyle(ButtonStyle.Success)
+                .setEmoji('✅');
+
+            const cancelButton = new ButtonBuilder()
+                .setCustomId(`transaction_cancel_${transactionId}`)
+                .setLabel('Cancel')
+                .setStyle(ButtonStyle.Danger)
+                .setEmoji('❌');
+
+            const row = new ActionRowBuilder()
+                .addComponents(completeButton, cancelButton);
+            
+            const embed = new EmbedBuilder()
+                .setTitle('🛒 New Transaction Created')
+                .setDescription(`Transaction ID: ${transactionId}`)
+                .addFields(
+                    { name: 'Buyer', value: `<@${user.id}>`, inline: true },
+                    { name: 'Item', value: itemName, inline: true },
+                    { name: 'Price', value: `$${totalPrice.toFixed(2)}`, inline: true },
+                    { name: 'Status', value: '⏳ Pending', inline: true },
+                    { name: 'Created By', value: `<@${interaction.user.id}>`, inline: true }
+                )
+                .setColor('#FFA500')
+                .setFooter({ text: 'Use the buttons below to complete or cancel this transaction' })
+                .setTimestamp();
+                
+            await interaction.reply({ 
+                embeds: [embed], 
+                components: [row] 
+            });
+            
+            console.log(`Transaction ${transactionId} created successfully by ${interaction.user.username}`);
+            
+        } catch (error) {
+            console.error('Error in createTransaction:', error);
+            await interaction.reply({ 
+                content: '❌ An error occurred while creating the transaction. Please try again.',
+                ephemeral: true 
+            });
+        }
+    },
+
+    async showHistory(interaction, database) {
+        try {
+            const targetUser = interaction.options.getUser('user');
+            let transactions;
+            let title;
+            
+            if (targetUser) {
+                // Show transactions for specific user
+                transactions = await database.getUserTransactions(targetUser.id);
+                title = `📋 Transaction History for ${targetUser.username}`;
+            } else {
+                // Show all recent transactions
+                transactions = await database.getAllTransactions(20);
+                title = '📋 All Recent Transactions';
+            }
+            
+            if (transactions.length === 0) {
+                const message = targetUser ? 
+                    `📋 No transactions found for ${targetUser.username}.` : 
+                    '📋 No transactions found.';
+                return await interaction.reply(message);
+            }
+            
+            const embed = new EmbedBuilder()
+                .setTitle(title)
+                .setDescription(transactions.slice(0, 15).map(t => {
+                    const status = this.getStatusEmoji(t.status);
+                    const username = t.username || 'Unknown';
+                    return `**ID:** ${t.transaction_id} | **User:** ${username}\n` +
+                           `**Item:** ${t.item_name} | **Amount:** $${parseFloat(t.total_amount).toFixed(2)}\n` +
+                           `**Status:** ${status} ${t.status} | **Date:** ${new Date(t.timestamp).toLocaleDateString()}`;
+                }).join('\n\n'))
+                .setColor('#0099FF')
+                .setFooter({ text: `Showing ${Math.min(transactions.length, 15)} transactions` })
+                .setTimestamp();
+                
+            if (transactions.length > 15) {
+                embed.addFields({ 
+                    name: 'Note', 
+                    value: `${transactions.length - 15} more transactions not shown. Use /admin status with specific transaction ID for details.` 
+                });
+            }
+                
+            await interaction.reply({ embeds: [embed] });
+            
+        } catch (error) {
+            console.error('Error in showHistory:', error);
+            await interaction.reply('❌ An error occurred while fetching transaction history.');
+        }
+    },
+
+    async checkTransactionStatus(interaction, database) {
+        try {
+            const transactionId = interaction.options.getInteger('transaction_id');
+            const transaction = await database.getTransactionById(transactionId);
+            
+            if (!transaction) {
+                return await interaction.reply('❌ Transaction not found.');
+            }
+            
+            const embed = new EmbedBuilder()
+                .setTitle('📊 Transaction Status')
+                .addFields(
+                    { name: 'Transaction ID', value: transaction.transaction_id.toString(), inline: true },
+                    { name: 'Buyer', value: `<@${transaction.user_id}>`, inline: true },
+                    { name: 'Username', value: transaction.username || 'Unknown', inline: true },
+                    { name: 'Item', value: transaction.item_name, inline: true },
+                    { name: 'Status', value: `${this.getStatusEmoji(transaction.status)} ${transaction.status}`, inline: true },
+                    { name: 'Total Amount', value: `$${parseFloat(transaction.total_amount).toFixed(2)}`, inline: true },
+                    { name: 'Date Created', value: new Date(transaction.timestamp).toLocaleDateString(), inline: true },
+                    { name: 'Time Created', value: new Date(transaction.timestamp).toLocaleTimeString(), inline: true }
+                )
+                .setColor(this.getStatusColor(transaction.status))
+                .setTimestamp();
+                
+            await interaction.reply({ embeds: [embed] });
+            
+        } catch (error) {
+            console.error('Error in checkTransactionStatus:', error);
+            await interaction.reply('❌ An error occurred while checking transaction status.');
+        }
+    },
+
+    // ==================== USER MANAGEMENT METHODS ====================
 
     async syncAllMembers(interaction, database) {
         try {
@@ -319,6 +497,8 @@ module.exports = {
         }
     },
 
+    // ==================== SCAMMER MANAGEMENT METHODS ====================
+
     async flagScammer(interaction, database) {
         const user = interaction.options.getUser('user');
         const reason = interaction.options.getString('reason') || 'No reason provided';
@@ -378,91 +558,7 @@ module.exports = {
         }
     },
 
-    async updateTransaction(interaction, database) {
-        try {
-            const transactionId = interaction.options.getInteger('transaction_id');
-            const newStatus = interaction.options.getString('status');
-
-            const transaction = await database.getTransactionById(transactionId);
-            if (!transaction) {
-                return await interaction.reply('❌ Transaction not found!');
-            }
-
-            await database.updateTransactionStatus(transactionId, newStatus);
-
-            const embed = new EmbedBuilder()
-                .setTitle('✅ Transaction Updated')
-                .addFields(
-                    { name: 'Transaction ID', value: transactionId.toString(), inline: true },
-                    { name: 'Item', value: transaction.item_name, inline: true },
-                    { name: 'User', value: transaction.username, inline: true },
-                    { name: 'Old Status', value: transaction.status, inline: true },
-                    { name: 'New Status', value: newStatus, inline: true },
-                    { name: 'Amount', value: `$${parseFloat(transaction.total_amount).toFixed(2)}`, inline: true }
-                )
-                .setColor('#00FF00')
-                .setTimestamp();
-
-            await interaction.reply({ embeds: [embed] });
-
-        } catch (error) {
-            console.error('Error updating transaction:', error);
-            await interaction.reply('❌ Error updating transaction.');
-        }
-    },
-
-    async showAllTransactions(interaction, database) {
-        try {
-            const transactions = await database.getAllTransactions(20);
-            
-            if (transactions.length === 0) {
-                return await interaction.reply('📋 No transactions found.');
-            }
-
-            const embed = new EmbedBuilder()
-                .setTitle('💰 All Recent Transactions')
-                .setDescription(transactions.map(t => 
-                    `**ID:** ${t.transaction_id} | **User:** ${t.username} | **Item:** ${t.item_name}\n` +
-                    `**Amount:** $${parseFloat(t.total_amount).toFixed(2)} | **Status:** ${t.status}`
-                ).join('\n\n'))
-                .setColor('#0099FF')
-                .setFooter({ text: `Showing last ${transactions.length} transactions` })
-                .setTimestamp();
-
-            await interaction.reply({ embeds: [embed] });
-
-        } catch (error) {
-            console.error('Error showing all transactions:', error);
-            await interaction.reply('❌ Error retrieving transactions.');
-        }
-    },
-
-    async showPendingTransactions(interaction, database) {
-        try {
-            const allTransactions = await database.getAllTransactions(100);
-            const pendingTransactions = allTransactions.filter(t => t.status === 'pending');
-            
-            if (pendingTransactions.length === 0) {
-                return await interaction.reply('✅ No pending transactions!');
-            }
-
-            const embed = new EmbedBuilder()
-                .setTitle('⏳ Pending Transactions')
-                .setDescription(pendingTransactions.map(t => 
-                    `**ID:** ${t.transaction_id} | **User:** ${t.username}\n` +
-                    `**Item:** ${t.item_name} | **Amount:** $${parseFloat(t.total_amount).toFixed(2)}`
-                ).join('\n\n'))
-                .setColor('#FFA500')
-                .setFooter({ text: `${pendingTransactions.length} pending transactions` })
-                .setTimestamp();
-
-            await interaction.reply({ embeds: [embed] });
-
-        } catch (error) {
-            console.error('Error showing pending transactions:', error);
-            await interaction.reply('❌ Error retrieving pending transactions.');
-        }
-    },
+    // ==================== BOT CONFIGURATION METHODS ====================
 
     async setWelcomeMessage(interaction, database) {
         const message = interaction.options.getString('message');
@@ -508,6 +604,8 @@ module.exports = {
             await interaction.reply('❌ Error removing persistent message.');
         }
     },
+
+    // ==================== SYSTEM METHODS ====================
 
     async manualBackup(interaction, database) {
         try {
@@ -587,6 +685,30 @@ module.exports = {
         } catch (error) {
             console.error('Error during cleanup:', error);
             await interaction.editReply('❌ Error during cleanup.');
+        }
+    },
+
+    // ==================== UTILITY METHODS ====================
+
+    getStatusEmoji(status) {
+        switch (status.toLowerCase()) {
+            case 'pending': return '⏳';
+            case 'completed': return '✅';
+            case 'failed': return '❌';
+            case 'disputed': return '⚠️';
+            case 'cancelled': return '🚫';
+            default: return '❓';
+        }
+    },
+
+    getStatusColor(status) {
+        switch (status.toLowerCase()) {
+            case 'pending': return '#FFA500';
+            case 'completed': return '#00FF00';
+            case 'failed': return '#FF0000';
+            case 'disputed': return '#FFFF00';
+            case 'cancelled': return '#808080';
+            default: return '#0099FF';
         }
     }
 };
