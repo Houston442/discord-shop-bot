@@ -283,18 +283,14 @@ class Database {
     // ==================== TRANSACTION METHODS ====================
 
     // Add new transaction with seller tracking
-    async addTransaction(userId, itemName, quantity, unitPrice, totalAmount, createdBy = null) {
+        async addTransaction(userId, itemName, quantity, unitPrice, totalAmount, createdBy = null) {
         try {
             const result = await this.pool.query(
                 'INSERT INTO transactions (user_id, item_name, quantity, unit_price, total_amount, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING transaction_id',
                 [userId, itemName, quantity, unitPrice, totalAmount, createdBy]
             );
             
-            // Update buyer stats
-            await this.pool.query(
-                'UPDATE users SET total_purchases = total_purchases + 1, total_spent = total_spent + $2 WHERE discord_id = $1',
-                [userId, totalAmount]
-            );
+            // DON'T update buyer stats here - wait until transaction is completed
             
             return result.rows[0].transaction_id;
         } catch (error) {
@@ -302,8 +298,8 @@ class Database {
             throw error;
         }
     }
-
-    // Update transaction status with seller tracking
+    
+    // Updated updateTransactionStatus method - update stats based on status
     async updateTransactionStatus(transactionId, status) {
         try {
             // Get transaction details first
@@ -323,27 +319,39 @@ class Database {
                 [transactionId, status]
             );
             
-            // If status is completed, update seller stats
-            if (status === 'completed' && transaction.created_by) {
-                await this.updateSellerStats(transaction.created_by, transaction.total_amount);
+            // Update stats based on the new status
+            if (status === 'completed') {
+                // Update buyer stats when completed
+                await this.pool.query(
+                    'UPDATE users SET total_purchases = total_purchases + 1, total_spent = total_spent + $2 WHERE discord_id = $1',
+                    [transaction.user_id, transaction.total_amount]
+                );
+                
+                // Update seller stats when completed
+                if (transaction.created_by) {
+                    await this.updateSellerStats(transaction.created_by, transaction.total_amount);
+                }
+            } else if (status === 'cancelled') {
+                // If transaction was previously completed and now cancelled, reverse the stats
+                if (transaction.status === 'completed') {
+                    // Reverse buyer stats
+                    await this.pool.query(
+                        'UPDATE users SET total_purchases = total_purchases - 1, total_spent = total_spent - $2 WHERE discord_id = $1',
+                        [transaction.user_id, transaction.total_amount]
+                    );
+                    
+                    // Reverse seller stats
+                    if (transaction.created_by) {
+                        await this.pool.query(
+                            'UPDATE users SET total_sales = total_sales - 1, total_earned = total_earned - $2 WHERE discord_id = $1',
+                            [transaction.created_by, transaction.total_amount]
+                        );
+                    }
+                }
             }
             
         } catch (error) {
             console.error('Error updating transaction status:', error);
-            throw error;
-        }
-    }
-
-    // Get user transactions
-    async getUserTransactions(userId) {
-        try {
-            const result = await this.pool.query(
-                'SELECT * FROM transactions WHERE user_id = $1 ORDER BY timestamp DESC',
-                [userId]
-            );
-            return result.rows;
-        } catch (error) {
-            console.error('Error getting user transactions:', error);
             throw error;
         }
     }
