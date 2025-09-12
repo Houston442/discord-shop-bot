@@ -1,5 +1,5 @@
-// bot.js - Updated for Slash Commands
-const { Client, GatewayIntentBits, Collection, EmbedBuilder, REST, Routes } = require('discord.js');
+// bot.js - YouTube/Twitch Monitoring Removed
+const { Client, GatewayIntentBits, Collection, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, REST, Routes } = require('discord.js');
 const { Pool } = require('pg');
 const cron = require('node-cron');
 const fs = require('fs');
@@ -8,8 +8,6 @@ require('dotenv').config();
 
 const Database = require('./database/connection');
 const BackupManager = require('./utils/backupManager');
-const YouTubeMonitor = require('./utils/youtubeMonitor');
-const TwitchMonitor = require('./utils/twitchMonitor');
 
 class ShopBot {
     constructor() {
@@ -25,8 +23,6 @@ class ShopBot {
 
         this.database = new Database();
         this.backupManager = new BackupManager(this.database);
-        this.youtubeMonitor = new YouTubeMonitor(this.database);
-        this.twitchMonitor = new TwitchMonitor(this.database);
         
         this.commands = new Collection();
         this.persistentMessages = new Map();
@@ -110,7 +106,7 @@ class ShopBot {
             try {
                 await this.database.initialize();
                 await this.loadPersistentMessages();
-                await this.registerSlashCommands(); // Register slash commands
+                await this.registerSlashCommands();
                 console.log('Database initialized, persistent messages loaded, and slash commands registered');
             } catch (error) {
                 console.error('Error during bot initialization:', error);
@@ -122,7 +118,7 @@ class ShopBot {
             await this.handleMemberJoin(member);
         });
 
-        // Message create (Activity tracking & Persistent messages - keep for activity tracking)
+        // Message create (Activity tracking & Persistent messages)
         this.client.on('messageCreate', async (message) => {
             if (message.author.bot) return;
             
@@ -349,8 +345,6 @@ class ShopBot {
                             const stats = await this.database.getDatabaseStats();
                             
                             // Create temporary file
-                            const fs = require('fs');
-                            const path = require('path');
                             const tempDir = './temp_backups';
                             
                             // Ensure temp directory exists
@@ -369,7 +363,7 @@ class ShopBot {
                             await channel.send({
                                 content: `✅ **Daily backup completed successfully**\n` +
                                         `Time: ${new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' })}\n` +
-                                        `Users: ${stats.users_count || 0} | Transactions: ${stats.transactions_count || 0} | Revenue: $${(stats.total_revenue || 0).toFixed(2)}\n` +
+                                        `Users: ${stats.users_count || 0} | Transactions: ${stats.transactions_count || 0} | Revenue: ${(stats.total_revenue || 0).toFixed(2)}\n` +
                                         `File Size: ${fileSizeMB} MB`,
                                 files: [{
                                     attachment: filePath,
@@ -415,29 +409,8 @@ class ShopBot {
             timezone: "UTC"
         });
 
-        // Check YouTube every 10 minutes
-        cron.schedule('*/10 * * * *', async () => {
-            try {
-                if (this.youtubeMonitor) {
-                    await this.youtubeMonitor.checkForNewVideos();
-                }
-            } catch (error) {
-                console.error('YouTube monitoring error:', error);
-            }
-        });
-
-        // Check Twitch every 5 minutes
-        cron.schedule('*/5 * * * *', async () => {
-            try {
-                if (this.twitchMonitor) {
-                    await this.twitchMonitor.checkForLiveStreams();
-                }
-            } catch (error) {
-                console.error('Twitch monitoring error:', error);
-            }
-        });
-
-        console.log('Scheduled tasks initialized');
+        console.log('Scheduled tasks initialized:');
+        console.log('- Daily backup: Every day at midnight BST/GMT (00:00 UTC)');
     }
 
     async start() {
