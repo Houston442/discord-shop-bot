@@ -1,4 +1,4 @@
-// commands/admin.js - All Admin Commands (Updated Structure)
+// commands/admin.js - All Admin Commands with Seller Tracking
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
@@ -42,6 +42,10 @@ module.exports = {
                     option.setName('transaction_id')
                         .setDescription('Transaction ID to check')
                         .setRequired(true)))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('leaderboard')
+                .setDescription('Show top sellers leaderboard'))
         // User Management Commands
         .addSubcommand(subcommand =>
             subcommand
@@ -136,32 +140,6 @@ module.exports = {
         
         switch (subcommand) {
             // Transaction Commands
-            case 'buy':
-                await this.createTransaction(interaction, database);
-                break;
-            case 'history':
-                await this.showHistory(interaction, database);
-                break;
-            case 'status':
-                await this.checkTransactionStatus(interaction, database);
-                break;
-            // User Management Commands
-            case 'syncmembers':
-                await this.syncAllMembers(interaction, database);
-                break;
-            case 'checkuser':
-                await this.checkUser(interaction, database);
-                break;
-            case 'stats':
-                await this.showStats(interaction, database);
-                break;
-            // Scammer Management Commands
-            case 'flagscammer':
-                await this.flagScammer(interaction, database);
-                break;
-            case 'unflagscammer':
-                await this.unflagScammer(interaction, database);
-                break;
             case 'scammerlist':
                 await this.listScammers(interaction, database);
                 break;
@@ -201,6 +179,9 @@ module.exports = {
             
             // Ensure user exists in database
             await database.addUser(user.id, user.username, user.discriminator);
+            // Ensure creator exists in database  
+            await database.addUser(interaction.user.id, interaction.user.username, interaction.user.discriminator);
+            
             console.log(`User ${user.username} added/updated in database`);
             
             // Check if user is flagged as scammer
@@ -212,14 +193,16 @@ module.exports = {
                 });
             }
             
-            console.log(`Creating transaction for user ${user.id}: ${itemName} @ $${totalPrice}`);
+            console.log(`Creating transaction for user ${user.id}: ${itemName} @ ${totalPrice}`);
             
+            // Pass the creator's ID (interaction.user.id) to track who created this transaction
             const transactionId = await database.addTransaction(
                 user.id,
                 itemName,
                 1, // Quantity is always 1 in simplified system
                 totalPrice, // Unit price = total price
-                totalPrice
+                totalPrice,
+                interaction.user.id // This tracks who created the transaction
             );
             
             // Create action buttons
@@ -244,7 +227,7 @@ module.exports = {
                 .addFields(
                     { name: 'Buyer', value: `<@${user.id}>`, inline: true },
                     { name: 'Item', value: itemName, inline: true },
-                    { name: 'Price', value: `$${totalPrice.toFixed(2)}`, inline: true },
+                    { name: 'Price', value: `${totalPrice.toFixed(2)}`, inline: true },
                     { name: 'Status', value: '⏳ Pending', inline: true },
                     { name: 'Created By', value: `<@${interaction.user.id}>`, inline: true }
                 )
@@ -296,9 +279,11 @@ module.exports = {
                 .setDescription(transactions.slice(0, 15).map(t => {
                     const status = this.getStatusEmoji(t.status);
                     const username = t.username || 'Unknown';
+                    const createdBy = t.creator_username || 'Unknown';
                     return `**ID:** ${t.transaction_id} | **User:** ${username}\n` +
-                           `**Item:** ${t.item_name} | **Amount:** $${parseFloat(t.total_amount).toFixed(2)}\n` +
-                           `**Status:** ${status} ${t.status} | **Date:** ${new Date(t.timestamp).toLocaleDateString()}`;
+                           `**Item:** ${t.item_name} | **Amount:** ${parseFloat(t.total_amount).toFixed(2)}\n` +
+                           `**Status:** ${status} ${t.status} | **Created by:** ${createdBy}\n` +
+                           `**Date:** ${new Date(t.timestamp).toLocaleDateString()}`;
                 }).join('\n\n'))
                 .setColor('#0099FF')
                 .setFooter({ text: `Showing ${Math.min(transactions.length, 15)} transactions` })
@@ -336,7 +321,8 @@ module.exports = {
                     { name: 'Username', value: transaction.username || 'Unknown', inline: true },
                     { name: 'Item', value: transaction.item_name, inline: true },
                     { name: 'Status', value: `${this.getStatusEmoji(transaction.status)} ${transaction.status}`, inline: true },
-                    { name: 'Total Amount', value: `$${parseFloat(transaction.total_amount).toFixed(2)}`, inline: true },
+                    { name: 'Total Amount', value: `${parseFloat(transaction.total_amount).toFixed(2)}`, inline: true },
+                    { name: 'Created By', value: transaction.creator_username || 'Unknown', inline: true },
                     { name: 'Date Created', value: new Date(transaction.timestamp).toLocaleDateString(), inline: true },
                     { name: 'Time Created', value: new Date(transaction.timestamp).toLocaleTimeString(), inline: true }
                 )
@@ -348,6 +334,34 @@ module.exports = {
         } catch (error) {
             console.error('Error in checkTransactionStatus:', error);
             await interaction.reply('❌ An error occurred while checking transaction status.');
+        }
+    },
+
+    async showLeaderboard(interaction, database) {
+        try {
+            const topSellers = await database.getTopSellers(10);
+            
+            if (topSellers.length === 0) {
+                return await interaction.reply('📋 No sales data available yet.');
+            }
+            
+            const leaderboardText = topSellers.map((seller, index) => {
+                const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+                return `${medal} **${seller.username}** - ${seller.total_sales} sales (${parseFloat(seller.total_earned).toFixed(2)})`;
+            }).join('\n');
+            
+            const embed = new EmbedBuilder()
+                .setTitle('🏆 Top Sellers Leaderboard')
+                .setDescription(leaderboardText)
+                .setColor('#FFD700')
+                .setFooter({ text: `Showing top ${topSellers.length} sellers` })
+                .setTimestamp();
+                
+            await interaction.reply({ embeds: [embed] });
+            
+        } catch (error) {
+            console.error('Error showing leaderboard:', error);
+            await interaction.reply('❌ Error retrieving leaderboard data.');
         }
     },
 
@@ -439,6 +453,7 @@ module.exports = {
             const userInfo = await database.getUserInfo(user.id);
             const transactions = await database.getUserTransactions(user.id);
             const activity = await database.getUserActivity(user.id);
+            const sellerStats = await database.getSellerStats(user.id);
             
             if (!userInfo) {
                 return await interaction.reply('❌ User not found in database!');
@@ -452,8 +467,10 @@ module.exports = {
                     { name: 'Join Date', value: userInfo.join_date?.toLocaleDateString() || 'Unknown', inline: true },
                     { name: 'Last Activity', value: userInfo.last_activity?.toLocaleDateString() || 'Unknown', inline: true },
                     { name: 'Total Purchases', value: userInfo.total_purchases.toString(), inline: true },
-                    { name: 'Total Spent', value: `$${parseFloat(userInfo.total_spent).toFixed(2)}`, inline: true },
-                    { name: 'Is Scammer', value: userInfo.is_scammer ? '⚠️ YES' : '✅ No', inline: true }
+                    { name: 'Total Spent', value: `${parseFloat(userInfo.total_spent).toFixed(2)}`, inline: true },
+                    { name: 'Is Scammer', value: userInfo.is_scammer ? '⚠️ YES' : '✅ No', inline: true },
+                    { name: 'Sales Created', value: sellerStats.total_sales?.toString() || '0', inline: true },
+                    { name: 'Revenue Generated', value: `${parseFloat(sellerStats.total_earned || 0).toFixed(2)}`, inline: true }
                 )
                 .setColor(userInfo.is_scammer ? '#FF0000' : '#00FF00')
                 .setTimestamp();
@@ -485,7 +502,8 @@ module.exports = {
                     { name: 'Flagged Scammers', value: scammers.length.toString(), inline: true },
                     { name: 'Total Transactions', value: stats.transactions_count?.toString() || '0', inline: true },
                     { name: 'Pending Transactions', value: stats.pending_transactions?.toString() || '0', inline: true },
-                    { name: 'Total Revenue', value: `$${(stats.total_revenue || 0).toFixed(2)}`, inline: true }
+                    { name: 'Total Revenue', value: `${(stats.total_revenue || 0).toFixed(2)}`, inline: true },
+                    { name: 'Sales Revenue', value: `${(stats.total_sales_revenue || 0).toFixed(2)}`, inline: true }
                 )
                 .setColor('#0099FF')
                 .setTimestamp();
@@ -634,7 +652,8 @@ module.exports = {
                     { name: 'Users', value: `${stats.users_count || 0}`, inline: true },
                     { name: 'Transactions', value: `${stats.transactions_count || 0}`, inline: true },
                     { name: 'Messages', value: `${stats.messages_count || 0}`, inline: true },
-                    { name: 'Revenue', value: `$${(stats.total_revenue || 0).toFixed(2)}`, inline: true }
+                    { name: 'Purchase Revenue', value: `${(stats.total_revenue || 0).toFixed(2)}`, inline: true },
+                    { name: 'Sales Revenue', value: `${(stats.total_sales_revenue || 0).toFixed(2)}`, inline: true }
                 )
                 .setColor('#00FF99')
                 .setTimestamp();
@@ -711,4 +730,33 @@ module.exports = {
             default: return '#0099FF';
         }
     }
-};
+}; 'buy':
+                await this.createTransaction(interaction, database);
+                break;
+            case 'history':
+                await this.showHistory(interaction, database);
+                break;
+            case 'status':
+                await this.checkTransactionStatus(interaction, database);
+                break;
+            case 'leaderboard':
+                await this.showLeaderboard(interaction, database);
+                break;
+            // User Management Commands
+            case 'syncmembers':
+                await this.syncAllMembers(interaction, database);
+                break;
+            case 'checkuser':
+                await this.checkUser(interaction, database);
+                break;
+            case 'stats':
+                await this.showStats(interaction, database);
+                break;
+            // Scammer Management Commands
+            case 'flagscammer':
+                await this.flagScammer(interaction, database);
+                break;
+            case 'unflagscammer':
+                await this.unflagScammer(interaction, database);
+                break;
+            case
