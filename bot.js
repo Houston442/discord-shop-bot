@@ -26,7 +26,6 @@ class ShopBot {
         
         this.commands = new Collection();
         this.persistentMessages = new Map();
-        this.roleSetupSessions = new Map(); // Store ongoing role setup sessions
         
         this.loadCommands();
         this.setupEventHandlers();
@@ -225,7 +224,10 @@ class ShopBot {
     async assignAutoRole(member) {
         try {
             const autoRoleName = await this.database.getAutoRole();
-            if (!autoRoleName) return;
+            if (!autoRoleName) {
+                console.log('No auto-role configured');
+                return;
+            }
 
             const role = member.guild.roles.cache.find(r => r.name === autoRoleName);
             if (!role) {
@@ -469,7 +471,7 @@ class ShopBot {
                 .addFields(
                     { name: 'Buyer', value: `<@${transaction.user_id}>`, inline: true },
                     { name: 'Item', value: transaction.item_name, inline: true },
-                    { name: 'Price', value: `$${parseFloat(transaction.total_amount).toFixed(2)}`, inline: true },
+                    { name: 'Price', value: `${parseFloat(transaction.total_amount).toFixed(2)}`, inline: true },
                     { name: 'Status', value: `${statusEmoji} ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`, inline: true },
                     { name: 'Updated By', value: `<@${interaction.user.id}>`, inline: true },
                     { name: 'Updated At', value: new Date().toLocaleString(), inline: true }
@@ -636,6 +638,9 @@ class ShopBot {
     }
 }
 
+// Create and start the bot
+const bot = new ShopBot();
+
 // Handle process termination
 process.on('SIGINT', async () => {
     console.log('Received SIGINT, shutting down gracefully...');
@@ -644,3 +649,6 @@ process.on('SIGINT', async () => {
     }
     process.exit(0);
 });
+
+// Start the bot
+bot.start();
