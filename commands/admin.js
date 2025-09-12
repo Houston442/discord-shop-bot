@@ -1,4 +1,4 @@
-// commands/admin.js - All Admin Commands with Seller Tracking
+// commands/admin.js - Clean Complete File
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
@@ -8,7 +8,6 @@ module.exports = {
         .setName('admin')
         .setDescription('Admin commands for bot management')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-        // Transaction Commands
         .addSubcommand(subcommand =>
             subcommand
                 .setName('buy')
@@ -46,7 +45,6 @@ module.exports = {
             subcommand
                 .setName('leaderboard')
                 .setDescription('Show top sellers leaderboard'))
-        // User Management Commands
         .addSubcommand(subcommand =>
             subcommand
                 .setName('syncmembers')
@@ -63,7 +61,6 @@ module.exports = {
             subcommand
                 .setName('stats')
                 .setDescription('Show server statistics and database overview'))
-        // Scammer Management Commands
         .addSubcommand(subcommand =>
             subcommand
                 .setName('flagscammer')
@@ -88,7 +85,6 @@ module.exports = {
             subcommand
                 .setName('scammerlist')
                 .setDescription('Display all flagged scammers with notes'))
-        // Bot Configuration Commands
         .addSubcommand(subcommand =>
             subcommand
                 .setName('setwelcome')
@@ -117,7 +113,6 @@ module.exports = {
                     option.setName('channel')
                         .setDescription('Channel to remove persistent message from')
                         .setRequired(true)))
-        // System Commands
         .addSubcommand(subcommand =>
             subcommand
                 .setName('backup')
@@ -139,11 +134,36 @@ module.exports = {
         const subcommand = interaction.options.getSubcommand();
         
         switch (subcommand) {
-            // Transaction Commands
+            case 'buy':
+                await this.createTransaction(interaction, database);
+                break;
+            case 'history':
+                await this.showHistory(interaction, database);
+                break;
+            case 'status':
+                await this.checkTransactionStatus(interaction, database);
+                break;
+            case 'leaderboard':
+                await this.showLeaderboard(interaction, database);
+                break;
+            case 'syncmembers':
+                await this.syncAllMembers(interaction, database);
+                break;
+            case 'checkuser':
+                await this.checkUser(interaction, database);
+                break;
+            case 'stats':
+                await this.showStats(interaction, database);
+                break;
+            case 'flagscammer':
+                await this.flagScammer(interaction, database);
+                break;
+            case 'unflagscammer':
+                await this.unflagScammer(interaction, database);
+                break;
             case 'scammerlist':
                 await this.listScammers(interaction, database);
                 break;
-            // Bot Configuration Commands
             case 'setwelcome':
                 await this.setWelcomeMessage(interaction, database);
                 break;
@@ -153,7 +173,6 @@ module.exports = {
             case 'removepersistent':
                 await this.removePersistentChannel(interaction, database);
                 break;
-            // System Commands
             case 'backup':
                 await this.manualBackup(interaction, database);
                 break;
@@ -169,22 +188,17 @@ module.exports = {
         }
     },
 
-    // ==================== TRANSACTION METHODS ====================
-
     async createTransaction(interaction, database) {
         try {
             const user = interaction.options.getUser('user');
             const itemName = interaction.options.getString('item');
             const totalPrice = interaction.options.getNumber('price');
             
-            // Ensure user exists in database
             await database.addUser(user.id, user.username, user.discriminator);
-            // Ensure creator exists in database  
             await database.addUser(interaction.user.id, interaction.user.username, interaction.user.discriminator);
             
             console.log(`User ${user.username} added/updated in database`);
             
-            // Check if user is flagged as scammer
             const userInfo = await database.getUserInfo(user.id);
             if (userInfo?.is_scammer) {
                 return await interaction.reply({ 
@@ -193,19 +207,17 @@ module.exports = {
                 });
             }
             
-            console.log(`Creating transaction for user ${user.id}: ${itemName} @ ${totalPrice}`);
+            console.log(`Creating transaction for user ${user.id}: ${itemName} @ $${totalPrice}`);
             
-            // Pass the creator's ID (interaction.user.id) to track who created this transaction
             const transactionId = await database.addTransaction(
                 user.id,
                 itemName,
-                1, // Quantity is always 1 in simplified system
-                totalPrice, // Unit price = total price
+                1,
                 totalPrice,
-                interaction.user.id // This tracks who created the transaction
+                totalPrice,
+                interaction.user.id
             );
             
-            // Create action buttons
             const completeButton = new ButtonBuilder()
                 .setCustomId(`transaction_complete_${transactionId}`)
                 .setLabel('Complete')
@@ -227,7 +239,7 @@ module.exports = {
                 .addFields(
                     { name: 'Buyer', value: `<@${user.id}>`, inline: true },
                     { name: 'Item', value: itemName, inline: true },
-                    { name: 'Price', value: `${totalPrice.toFixed(2)}`, inline: true },
+                    { name: 'Price', value: `$${totalPrice.toFixed(2)}`, inline: true },
                     { name: 'Status', value: '⏳ Pending', inline: true },
                     { name: 'Created By', value: `<@${interaction.user.id}>`, inline: true }
                 )
@@ -258,11 +270,9 @@ module.exports = {
             let title;
             
             if (targetUser) {
-                // Show transactions for specific user
                 transactions = await database.getUserTransactions(targetUser.id);
                 title = `📋 Transaction History for ${targetUser.username}`;
             } else {
-                // Show all recent transactions
                 transactions = await database.getAllTransactions(20);
                 title = '📋 All Recent Transactions';
             }
@@ -281,7 +291,7 @@ module.exports = {
                     const username = t.username || 'Unknown';
                     const createdBy = t.creator_username || 'Unknown';
                     return `**ID:** ${t.transaction_id} | **User:** ${username}\n` +
-                           `**Item:** ${t.item_name} | **Amount:** ${parseFloat(t.total_amount).toFixed(2)}\n` +
+                           `**Item:** ${t.item_name} | **Amount:** $${parseFloat(t.total_amount).toFixed(2)}\n` +
                            `**Status:** ${status} ${t.status} | **Created by:** ${createdBy}\n` +
                            `**Date:** ${new Date(t.timestamp).toLocaleDateString()}`;
                 }).join('\n\n'))
@@ -321,7 +331,7 @@ module.exports = {
                     { name: 'Username', value: transaction.username || 'Unknown', inline: true },
                     { name: 'Item', value: transaction.item_name, inline: true },
                     { name: 'Status', value: `${this.getStatusEmoji(transaction.status)} ${transaction.status}`, inline: true },
-                    { name: 'Total Amount', value: `${parseFloat(transaction.total_amount).toFixed(2)}`, inline: true },
+                    { name: 'Total Amount', value: `$${parseFloat(transaction.total_amount).toFixed(2)}`, inline: true },
                     { name: 'Created By', value: transaction.creator_username || 'Unknown', inline: true },
                     { name: 'Date Created', value: new Date(transaction.timestamp).toLocaleDateString(), inline: true },
                     { name: 'Time Created', value: new Date(transaction.timestamp).toLocaleTimeString(), inline: true }
@@ -347,7 +357,7 @@ module.exports = {
             
             const leaderboardText = topSellers.map((seller, index) => {
                 const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-                return `${medal} **${seller.username}** - ${seller.total_sales} sales (${parseFloat(seller.total_earned).toFixed(2)})`;
+                return `${medal} **${seller.username}** - ${seller.total_sales} sales ($${parseFloat(seller.total_earned).toFixed(2)})`;
             }).join('\n');
             
             const embed = new EmbedBuilder()
@@ -364,8 +374,6 @@ module.exports = {
             await interaction.reply('❌ Error retrieving leaderboard data.');
         }
     },
-
-    // ==================== USER MANAGEMENT METHODS ====================
 
     async syncAllMembers(interaction, database) {
         try {
@@ -467,10 +475,10 @@ module.exports = {
                     { name: 'Join Date', value: userInfo.join_date?.toLocaleDateString() || 'Unknown', inline: true },
                     { name: 'Last Activity', value: userInfo.last_activity?.toLocaleDateString() || 'Unknown', inline: true },
                     { name: 'Total Purchases', value: userInfo.total_purchases.toString(), inline: true },
-                    { name: 'Total Spent', value: `${parseFloat(userInfo.total_spent).toFixed(2)}`, inline: true },
+                    { name: 'Total Spent', value: `$${parseFloat(userInfo.total_spent).toFixed(2)}`, inline: true },
                     { name: 'Is Scammer', value: userInfo.is_scammer ? '⚠️ YES' : '✅ No', inline: true },
                     { name: 'Sales Created', value: sellerStats.total_sales?.toString() || '0', inline: true },
-                    { name: 'Revenue Generated', value: `${parseFloat(sellerStats.total_earned || 0).toFixed(2)}`, inline: true }
+                    { name: 'Revenue Generated', value: `$${parseFloat(sellerStats.total_earned || 0).toFixed(2)}`, inline: true }
                 )
                 .setColor(userInfo.is_scammer ? '#FF0000' : '#00FF00')
                 .setTimestamp();
@@ -502,8 +510,8 @@ module.exports = {
                     { name: 'Flagged Scammers', value: scammers.length.toString(), inline: true },
                     { name: 'Total Transactions', value: stats.transactions_count?.toString() || '0', inline: true },
                     { name: 'Pending Transactions', value: stats.pending_transactions?.toString() || '0', inline: true },
-                    { name: 'Total Revenue', value: `${(stats.total_revenue || 0).toFixed(2)}`, inline: true },
-                    { name: 'Sales Revenue', value: `${(stats.total_sales_revenue || 0).toFixed(2)}`, inline: true }
+                    { name: 'Total Revenue', value: `$${(stats.total_revenue || 0).toFixed(2)}`, inline: true },
+                    { name: 'Sales Revenue', value: `$${(stats.total_sales_revenue || 0).toFixed(2)}`, inline: true }
                 )
                 .setColor('#0099FF')
                 .setTimestamp();
@@ -514,8 +522,6 @@ module.exports = {
             await interaction.reply('❌ Error retrieving statistics.');
         }
     },
-
-    // ==================== SCAMMER MANAGEMENT METHODS ====================
 
     async flagScammer(interaction, database) {
         const user = interaction.options.getUser('user');
@@ -576,8 +582,6 @@ module.exports = {
         }
     },
 
-    // ==================== BOT CONFIGURATION METHODS ====================
-
     async setWelcomeMessage(interaction, database) {
         const message = interaction.options.getString('message');
         
@@ -623,8 +627,6 @@ module.exports = {
         }
     },
 
-    // ==================== SYSTEM METHODS ====================
-
     async manualBackup(interaction, database) {
         try {
             await interaction.deferReply();
@@ -652,8 +654,8 @@ module.exports = {
                     { name: 'Users', value: `${stats.users_count || 0}`, inline: true },
                     { name: 'Transactions', value: `${stats.transactions_count || 0}`, inline: true },
                     { name: 'Messages', value: `${stats.messages_count || 0}`, inline: true },
-                    { name: 'Purchase Revenue', value: `${(stats.total_revenue || 0).toFixed(2)}`, inline: true },
-                    { name: 'Sales Revenue', value: `${(stats.total_sales_revenue || 0).toFixed(2)}`, inline: true }
+                    { name: 'Purchase Revenue', value: `$${(stats.total_revenue || 0).toFixed(2)}`, inline: true },
+                    { name: 'Sales Revenue', value: `$${(stats.total_sales_revenue || 0).toFixed(2)}`, inline: true }
                 )
                 .setColor('#00FF99')
                 .setTimestamp();
@@ -707,8 +709,6 @@ module.exports = {
         }
     },
 
-    // ==================== UTILITY METHODS ====================
-
     getStatusEmoji(status) {
         switch (status.toLowerCase()) {
             case 'pending': return '⏳';
@@ -730,33 +730,4 @@ module.exports = {
             default: return '#0099FF';
         }
     }
-}; 'buy':
-                await this.createTransaction(interaction, database);
-                break;
-            case 'history':
-                await this.showHistory(interaction, database);
-                break;
-            case 'status':
-                await this.checkTransactionStatus(interaction, database);
-                break;
-            case 'leaderboard':
-                await this.showLeaderboard(interaction, database);
-                break;
-            // User Management Commands
-            case 'syncmembers':
-                await this.syncAllMembers(interaction, database);
-                break;
-            case 'checkuser':
-                await this.checkUser(interaction, database);
-                break;
-            case 'stats':
-                await this.showStats(interaction, database);
-                break;
-            // Scammer Management Commands
-            case 'flagscammer':
-                await this.flagScammer(interaction, database);
-                break;
-            case 'unflagscammer':
-                await this.unflagScammer(interaction, database);
-                break;
-            case
+};
