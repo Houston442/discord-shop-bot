@@ -1,4 +1,4 @@
-// bot.js - YouTube/Twitch Monitoring Removed
+// bot.js - Updated with Button Interaction Handling
 const { Client, GatewayIntentBits, Collection, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, REST, Routes } = require('discord.js');
 const { Pool } = require('pg');
 const cron = require('node-cron');
@@ -281,9 +281,66 @@ class ShopBot {
 
     async handleButtonInteraction(interaction) {
         try {
-            await interaction.reply({ content: 'Button interaction received!', ephemeral: true });
+            if (interaction.customId.startsWith('transaction_')) {
+                await this.handleTransactionButton(interaction);
+            } else {
+                await interaction.reply({ content: 'Button interaction received!', ephemeral: true });
+            }
         } catch (error) {
             console.error('Error handling button interaction:', error);
+            await interaction.reply({ content: 'Error processing button interaction!', ephemeral: true });
+        }
+    }
+
+    async handleTransactionButton(interaction) {
+        try {
+            const [, action, transactionId] = interaction.customId.split('_');
+            const transaction = await this.database.getTransactionById(parseInt(transactionId));
+
+            if (!transaction) {
+                return await interaction.reply({ content: 'Transaction not found!', ephemeral: true });
+            }
+
+            let newStatus = '';
+            let statusColor = '';
+            let statusEmoji = '';
+
+            if (action === 'complete') {
+                newStatus = 'completed';
+                statusColor = '#00FF00';
+                statusEmoji = '✅';
+            } else if (action === 'cancel') {
+                newStatus = 'cancelled';
+                statusColor = '#808080';
+                statusEmoji = '🚫';
+            }
+
+            await this.database.updateTransactionStatus(parseInt(transactionId), newStatus);
+
+            // Update the original message
+            const updatedEmbed = new EmbedBuilder()
+                .setTitle('🛒 Transaction Updated')
+                .setDescription(`Transaction ID: ${transactionId}`)
+                .addFields(
+                    { name: 'Item', value: transaction.item_name, inline: true },
+                    { name: 'Quantity', value: transaction.quantity.toString(), inline: true },
+                    { name: 'Unit Price', value: `$${parseFloat(transaction.unit_price).toFixed(2)}`, inline: true },
+                    { name: 'Total Amount', value: `$${parseFloat(transaction.total_amount).toFixed(2)}`, inline: true },
+                    { name: 'Status', value: `${statusEmoji} ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`, inline: true },
+                    { name: 'Buyer', value: `<@${transaction.user_id}>`, inline: true },
+                    { name: 'Updated By', value: `<@${interaction.user.id}>`, inline: true }
+                )
+                .setColor(statusColor)
+                .setFooter({ text: `Transaction ${newStatus} by ${interaction.user.username}` })
+                .setTimestamp();
+
+            await interaction.update({ embeds: [updatedEmbed], components: [] });
+
+            console.log(`Transaction ${transactionId} ${newStatus} by ${interaction.user.username}`);
+
+        } catch (error) {
+            console.error('Error handling transaction button:', error);
+            await interaction.reply({ content: 'Error updating transaction status!', ephemeral: true });
         }
     }
 
