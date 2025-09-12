@@ -1,4 +1,4 @@
-// commands/help.js - Updated Help for New Transaction System
+// commands/help.js - Complete Updated Help with Role Management System
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = {
@@ -9,8 +9,8 @@ module.exports = {
     async execute(interaction, database) {
         try {
             const embed = new EmbedBuilder()
-                .setTitle('🤖 Discord Shop Bot - Command Guide')
-                .setDescription('All available commands and their usage:')
+                .setTitle('🤖 Discord Shop Bot - Complete Command Guide')
+                .setDescription('All available admin commands and their usage:')
                 .addFields(
                     // Transaction Commands Section
                     { 
@@ -19,6 +19,7 @@ module.exports = {
                         '/admin buy @user <item> <price>\n' +
                         '/admin history [user]\n' +
                         '/admin status <transaction_id>\n' +
+                        '/admin leaderboard\n' +
                         '```', 
                         inline: false 
                     },
@@ -30,7 +31,8 @@ module.exports = {
                         '   • Automatically checks if user is flagged as scammer\n' +
                         '   • Buttons update transaction status immediately\n' +
                         '**`/admin history`** - View all recent transactions or for specific user\n' +
-                        '**`/admin status`** - Check detailed status of a specific transaction\n',
+                        '**`/admin status`** - Check detailed status of a specific transaction\n' +
+                        '**`/admin leaderboard`** - Show top sellers based on completed transactions\n',
                         inline: false 
                     },
 
@@ -49,7 +51,57 @@ module.exports = {
                         value: 
                         '**`/admin syncmembers`** - Add all Discord server members to database\n' +
                         '**`/admin checkuser`** - View detailed user info, transactions, and activity\n' +
+                        '   • Shows both buyer and seller statistics\n' +
                         '**`/admin stats`** - Show server statistics and database overview\n',
+                        inline: false 
+                    },
+
+                    // Role Management Section
+                    { 
+                        name: '🎭 **ROLE MANAGEMENT COMMANDS** (Admin Only)', 
+                        value: '```' +
+                        '/admin syncroles\n' +
+                        '/admin listroles\n' +
+                        '/admin setautorole [role]\n' +
+                        '/admin createsetup <name>\n' +
+                        '/admin listsetups\n' +
+                        '/admin deletesetup <setup_id>\n' +
+                        '```', 
+                        inline: false 
+                    },
+                    { 
+                        name: '📝 Role Management Details', 
+                        value: 
+                        '**`/admin syncroles`** - Sync all Discord server roles to database\n' +
+                        '   • Automatically happens when roles are created/updated/deleted\n' +
+                        '**`/admin listroles`** - List all assignable server roles\n' +
+                        '**`/admin setautorole`** - Set role auto-assigned to new members\n' +
+                        '   • Default: "Tesco Clubcard" role\n' +
+                        '**`/admin createsetup`** - Create custom role selection menu\n' +
+                        '   • Interactive setup process with embed customization\n' +
+                        '**`/admin listsetups`** - View all role setup configurations\n' +
+                        '**`/admin deletesetup`** - Delete a role setup configuration\n',
+                        inline: false 
+                    },
+
+                    // Role Deployment Section
+                    { 
+                        name: '🚀 **ROLE DEPLOYMENT COMMANDS** (Admin Only)', 
+                        value: '```' +
+                        '/roles deploy <setup_id> [channel]\n' +
+                        '/roles preview <setup_id>\n' +
+                        '/roles undeploy <setup_id>\n' +
+                        '```', 
+                        inline: false 
+                    },
+                    { 
+                        name: '📝 Role Deployment Details', 
+                        value: 
+                        '**`/roles deploy`** - Deploy a role setup to a channel\n' +
+                        '   • Creates interactive role selection menu\n' +
+                        '   • Users can select/deselect roles from dropdown\n' +
+                        '**`/roles preview`** - Preview a role setup before deploying\n' +
+                        '**`/roles undeploy`** - Remove a deployed role menu\n',
                         inline: false 
                     },
 
@@ -105,7 +157,6 @@ module.exports = {
                         '/admin setwelcome <message>\n' +
                         '/admin setpersistent #channel <message>\n' +
                         '/admin removepersistent #channel\n' +
-                        '/setup roles\n' +
                         '```', 
                         inline: false 
                     },
@@ -114,8 +165,7 @@ module.exports = {
                         value: 
                         '**`/admin setwelcome`** - Set welcome DM message for new members\n' +
                         '**`/admin setpersistent`** - Set message that always stays last in channel\n' +
-                        '**`/admin removepersistent`** - Remove persistent message from channel\n' +
-                        '**`/setup roles`** - Create interactive role selection menu\n',
+                        '**`/admin removepersistent`** - Remove persistent message from channel\n',
                         inline: false 
                     },
 
@@ -140,19 +190,56 @@ module.exports = {
                         inline: false 
                     },
 
+                    // Role Setup Workflow Section
+                    { 
+                        name: '🎨 **ROLE SETUP CREATION WORKFLOW**', 
+                        value: 
+                        '**Step 1:** Use `/admin createsetup <name>` to start interactive setup\n' +
+                        '**Step 2:** Configure embed appearance (title, description, thumbnail, image, color, footer)\n' +
+                        '**Step 3:** Add role options with format: `[Label] | [Description] | [Emoji] | [Role Name]`\n' +
+                        '**Step 4:** Preview with `/roles preview <setup_id>`\n' +
+                        '**Step 5:** Deploy with `/roles deploy <setup_id> [channel]`\n\n' +
+                        '**Interactive Setup Features:**\n' +
+                        '• Fully customizable embed appearance\n' +
+                        '• Up to 25 role options per setup\n' +
+                        '• Custom emojis and descriptions for each role\n' +
+                        '• Real-time preview before deployment\n' +
+                        '• Multiple setups can be created and deployed\n',
+                        inline: false 
+                    },
+
                     // Transaction Workflow Section
                     { 
-                        name: '🔄 **NEW TRANSACTION WORKFLOW**', 
+                        name: '🔄 **TRANSACTION WORKFLOW**', 
                         value: 
                         '**Step 1:** Use `/admin buy @user item_name price` to create transaction\n' +
                         '**Step 2:** Transaction message appears with Complete ✅ and Cancel ❌ buttons\n' +
                         '**Step 3:** Click appropriate button to update transaction status\n' +
-                        '**Step 4:** Use `/admin history` or `/admin status` to view transaction details\n\n' +
+                        '**Step 4:** Stats are updated only when transaction is completed\n\n' +
                         '**Button Actions:**\n' +
-                        '• ✅ **Complete** - Marks transaction as completed (green)\n' +
-                        '• ❌ **Cancel** - Marks transaction as cancelled (gray)\n' +
+                        '• ✅ **Complete** - Marks transaction as completed (updates buyer/seller stats)\n' +
+                        '• ❌ **Cancel** - Marks transaction as cancelled (no stat changes)\n' +
                         '• Buttons disappear after use and embed updates with new status\n' +
-                        '• No more complex transaction status management needed!\n',
+                        '• Seller performance tracked automatically for leaderboards\n',
+                        inline: false 
+                    },
+
+                    // Auto-Role System Section
+                    { 
+                        name: '🤖 **AUTOMATIC SYSTEMS**', 
+                        value: 
+                        '**Auto-Role Assignment:**\n' +
+                        '• New members automatically get "Tesco Clubcard" role\n' +
+                        '• Configurable with `/admin setautorole`\n\n' +
+                        '**Role Syncing:**\n' +
+                        '• Server roles automatically sync to database when created/updated/deleted\n' +
+                        '• Manual sync available with `/admin syncroles`\n\n' +
+                        '**Member Syncing:**\n' +
+                        '• Use `/admin syncmembers` to sync all server members to database\n' +
+                        '• Automatic tracking when members interact with bot\n\n' +
+                        '**Daily Backups:**\n' +
+                        '• Automatic database backup every day at midnight GMT\n' +
+                        '• Manual backups with `/admin backup`\n',
                         inline: false 
                     },
 
@@ -162,7 +249,8 @@ module.exports = {
                         value: 
                         '**Server Emojis:** Use `:emoji_name:` format in message commands\n' +
                         '   • Example: `:shop_icon:`, `:verified:`, `:diamond:`, `:warning_sign:`\n' +
-                        '   • Works in: welcome messages, persistent messages, all message commands\n\n' +
+                        '   • Works in: welcome messages, persistent messages, all message commands\n' +
+                        '   • Works in: role setup descriptions and options\n\n' +
                         '**Unicode Emojis:** Work normally everywhere\n' +
                         '   • Example: 🛒 💎 ⚠️ ✅ ❌ 🔔 🎉 ❤️ 🔥 ⭐ 💰 🛡️\n',
                         inline: false 
@@ -173,18 +261,19 @@ module.exports = {
                         name: '💡 **QUICK EXAMPLES**', 
                         value: 
                         '```\n' +
-                        '# Create a transaction (new simplified way)\n' +
+                        '# Create a transaction\n' +
                         '/admin buy @JohnDoe Dragon Sword 25.99\n\n' +
-                        '# Check transaction history for specific user\n' +
-                        '/admin history @JohnDoe\n\n' +
+                        '# Create a role setup\n' +
+                        '/admin createsetup "Ping Roles"\n' +
+                        '# Then follow interactive prompts\n\n' +
+                        '# Set auto-role for new members\n' +
+                        '/admin setautorole @Tesco Clubcard\n\n' +
+                        '# Deploy a role menu\n' +
+                        '/roles deploy 1 #role-selection\n\n' +
                         '# Send message with custom emoji\n' +
-                        '/message send Welcome! :shop_icon: Check our deals :fire:\n\n' +
-                        '# Create embed announcement\n' +
-                        '/message embed "Shop Update" "New items added!" #00FF00\n\n' +
+                        '/message send Welcome! :shop_icon: Check our deals\n\n' +
                         '# Flag a scammer\n' +
-                        '/admin flagscammer @user Attempted to scam other members\n\n' +
-                        '# Set welcome message\n' +
-                        '/admin setwelcome Welcome to our shop! :diamond: Read the rules\n' +
+                        '/admin flagscammer @user Attempted to scam members\n' +
                         '```',
                         inline: false 
                     },
@@ -194,22 +283,24 @@ module.exports = {
                         name: '🔐 **PERMISSION REQUIREMENTS**', 
                         value: 
                         '**Everyone:** `/help` command only\n' +
-                        '**Admin Only:** `/admin` commands, `/message` commands, `/setup` commands\n' +
-                        '**Note:** Admin commands require Discord Administrator permission\n' +
-                        '**New:** Simplified transaction system - no complex status management!\n',
+                        '**Admin Only:** All other commands require Discord Administrator permission\n' +
+                        '**Auto-Role:** "Tesco Clubcard" role assigned automatically to new members\n' +
+                        '**Role Selection:** Members can use deployed role menus to self-assign roles\n',
                         inline: false 
                     },
 
                     // Important Changes Section
                     { 
-                        name: '⚠️ **IMPORTANT CHANGES**', 
+                        name: '⚠️ **KEY FEATURES**', 
                         value: 
-                        '• **Simplified Transactions** - Use `/admin buy` instead of users creating their own\n' +
-                        '• **Button Controls** - Complete/Cancel transactions with buttons, not commands\n' +
-                        '• **Admin-Controlled** - Only admins can create and manage transactions\n' +
-                        '• **Scammer Protection** - Automatic blocking of flagged users from transactions\n' +
-                        '• **Immediate Updates** - Button clicks instantly update transaction status\n' +
-                        '• **Cleaner Workflow** - No more complex transaction status types\n',
+                        '• **Dynamic Role System** - Roles sync automatically with Discord server\n' +
+                        '• **Custom Role Menus** - Fully customizable role selection interfaces\n' +
+                        '• **Seller Tracking** - Performance metrics for transaction creators\n' +
+                        '• **Scammer Protection** - Automatic blocking of flagged users\n' +
+                        '• **Auto-Role Assignment** - New members get default role automatically\n' +
+                        '• **Button-Based Transactions** - Simple complete/cancel workflow\n' +
+                        '• **Interactive Setup** - Guided role menu creation process\n' +
+                        '• **Multiple Deployments** - Create and deploy multiple role menus\n',
                         inline: false 
                     },
 
@@ -220,14 +311,15 @@ module.exports = {
                         '• Use Discord\'s auto-complete by typing `/` and selecting commands\n' +
                         '• Required parameters are marked as such in Discord\n' +
                         '• Optional parameters are shown in [brackets] above\n' +
-                        '• Most commands are admin-only for security and control\n' +
-                        '• The new transaction system is much simpler to use!\n',
+                        '• All admin commands require Administrator permission\n' +
+                        '• Role setup creation is interactive - follow the prompts!\n' +
+                        '• Contact server administrators for additional support\n',
                         inline: false 
                     }
                 )
                 .setColor('#0099FF')
                 .setFooter({ 
-                    text: 'Discord Shop Bot | Simplified Transaction System | Type / to see available commands' 
+                    text: 'Discord Shop Bot | Advanced Role Management | Type / to see available commands' 
                 })
                 .setTimestamp();
                 
