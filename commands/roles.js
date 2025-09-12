@@ -1,27 +1,13 @@
-// commands/roles.js - Slash Command Version
+// commands/roles.js - Individual Roles Command
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('setup')
-        .setDescription('Setup commands for bot features')
-        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('roles')
-                .setDescription('Create role selection menu')),
+        .setName('roles')
+        .setDescription('Create role selection menu')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
     
     async execute(interaction, database) {
-        const subcommand = interaction.options.getSubcommand();
-        
-        switch (subcommand) {
-            case 'roles':
-                await this.setupRoleSelection(interaction);
-                break;
-        }
-    },
-
-    async setupRoleSelection(interaction) {
         try {
             const embed = new EmbedBuilder()
                 .setTitle('🎭 Role Selection')
