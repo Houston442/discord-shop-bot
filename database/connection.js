@@ -1,4 +1,4 @@
-// database/connection.js - Complete Database Connection and Management
+// database/connection.js - Complete Database Connection and Management with Seller Tracking
 const { Pool } = require('pg');
 
 class Database {
@@ -21,7 +21,7 @@ class Database {
 
     async createTables() {
         const queries = [
-            // Users table
+            // Users table with seller tracking
             `CREATE TABLE IF NOT EXISTS users (
                 discord_id VARCHAR(20) PRIMARY KEY,
                 username VARCHAR(32) NOT NULL,
@@ -29,12 +29,14 @@ class Database {
                 join_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 total_purchases INTEGER DEFAULT 0,
                 total_spent DECIMAL(10,2) DEFAULT 0,
+                total_sales INTEGER DEFAULT 0,
+                total_earned DECIMAL(10,2) DEFAULT 0,
                 last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 is_scammer BOOLEAN DEFAULT FALSE,
                 scammer_notes TEXT
             )`,
 
-            // Transactions table
+            // Transactions table with created_by tracking
             `CREATE TABLE IF NOT EXISTS transactions (
                 transaction_id SERIAL PRIMARY KEY,
                 user_id VARCHAR(20) REFERENCES users(discord_id),
@@ -43,6 +45,7 @@ class Database {
                 unit_price DECIMAL(10,2) NOT NULL,
                 total_amount DECIMAL(10,2) NOT NULL,
                 status VARCHAR(20) DEFAULT 'pending',
+                created_by VARCHAR(20) REFERENCES users(discord_id),
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`,
 
@@ -232,17 +235,62 @@ class Database {
         }
     }
 
-    // ==================== TRANSACTION METHODS ====================
+    // ==================== SELLER TRACKING METHODS ====================
 
-    // Add new transaction
-    async addTransaction(userId, itemName, quantity, unitPrice, totalAmount) {
+    // Get seller statistics for a user
+    async getSellerStats(userId) {
         try {
             const result = await this.pool.query(
-                'INSERT INTO transactions (user_id, item_name, quantity, unit_price, total_amount) VALUES ($1, $2, $3, $4, $5) RETURNING transaction_id',
-                [userId, itemName, quantity, unitPrice, totalAmount]
+                'SELECT total_sales, total_earned FROM users WHERE discord_id = $1',
+                [userId]
+            );
+            return result.rows[0] || { total_sales: 0, total_earned: 0 };
+        } catch (error) {
+            console.error('Error getting seller stats:', error);
+            return { total_sales: 0, total_earned: 0 };
+        }
+    }
+
+    // Get top sellers leaderboard
+    async getTopSellers(limit = 10) {
+        try {
+            const result = await this.pool.query(
+                'SELECT discord_id, username, total_sales, total_earned FROM users WHERE total_sales > 0 ORDER BY total_earned DESC LIMIT $1',
+                [limit]
+            );
+            return result.rows;
+        } catch (error) {
+            console.error('Error getting top sellers:', error);
+            return [];
+        }
+    }
+
+    // Update seller stats when transaction is completed
+    async updateSellerStats(createdBy, totalAmount) {
+        try {
+            if (createdBy) {
+                await this.pool.query(
+                    'UPDATE users SET total_sales = total_sales + 1, total_earned = total_earned + $2 WHERE discord_id = $1',
+                    [createdBy, totalAmount]
+                );
+            }
+        } catch (error) {
+            console.error('Error updating seller stats:', error);
+            throw error;
+        }
+    }
+
+    // ==================== TRANSACTION METHODS ====================
+
+    // Add new transaction with seller tracking
+    async addTransaction(userId, itemName, quantity, unitPrice, totalAmount, createdBy = null) {
+        try {
+            const result = await this.pool.query(
+                'INSERT INTO transactions (user_id, item_name, quantity, unit_price, total_amount, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING transaction_id',
+                [userId, itemName, quantity, unitPrice, totalAmount, createdBy]
             );
             
-            // Update user stats
+            // Update buyer stats
             await this.pool.query(
                 'UPDATE users SET total_purchases = total_purchases + 1, total_spent = total_spent + $2 WHERE discord_id = $1',
                 [userId, totalAmount]
@@ -255,13 +303,31 @@ class Database {
         }
     }
 
-    // Update transaction status
+    // Update transaction status with seller tracking
     async updateTransactionStatus(transactionId, status) {
         try {
+            // Get transaction details first
+            const transactionResult = await this.pool.query(
+                'SELECT * FROM transactions WHERE transaction_id = $1',
+                [transactionId]
+            );
+            
+            const transaction = transactionResult.rows[0];
+            if (!transaction) {
+                throw new Error('Transaction not found');
+            }
+            
+            // Update status
             await this.pool.query(
                 'UPDATE transactions SET status = $2 WHERE transaction_id = $1',
                 [transactionId, status]
             );
+            
+            // If status is completed, update seller stats
+            if (status === 'completed' && transaction.created_by) {
+                await this.updateSellerStats(transaction.created_by, transaction.total_amount);
+            }
+            
         } catch (error) {
             console.error('Error updating transaction status:', error);
             throw error;
@@ -286,9 +352,10 @@ class Database {
     async getAllTransactions(limit = 50) {
         try {
             const result = await this.pool.query(
-                `SELECT t.*, u.username 
+                `SELECT t.*, u.username, c.username as creator_username
                  FROM transactions t 
                  JOIN users u ON t.user_id = u.discord_id 
+                 LEFT JOIN users c ON t.created_by = c.discord_id
                  ORDER BY t.timestamp DESC 
                  LIMIT $1`,
                 [limit]
@@ -304,9 +371,10 @@ class Database {
     async getTransactionById(transactionId) {
         try {
             const result = await this.pool.query(
-                `SELECT t.*, u.username 
+                `SELECT t.*, u.username, c.username as creator_username
                  FROM transactions t 
                  JOIN users u ON t.user_id = u.discord_id 
+                 LEFT JOIN users c ON t.created_by = c.discord_id
                  WHERE t.transaction_id = $1`,
                 [transactionId]
             );
@@ -594,6 +662,9 @@ class Database {
             
             const totalSpentResult = await this.pool.query('SELECT SUM(total_spent) as total FROM users');
             stats.total_revenue = parseFloat(totalSpentResult.rows[0].total || 0);
+            
+            const totalEarnedResult = await this.pool.query('SELECT SUM(total_earned) as total FROM users');
+            stats.total_sales_revenue = parseFloat(totalEarnedResult.rows[0].total || 0);
             
             const pendingTransactionsResult = await this.pool.query('SELECT COUNT(*) as count FROM transactions WHERE status = \'pending\'');
             stats.pending_transactions = parseInt(pendingTransactionsResult.rows[0].count);
