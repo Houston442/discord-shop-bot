@@ -1,4 +1,4 @@
-// bot.js - Updated with Button Interaction Handling
+// bot.js - Updated with Button Interaction Handling for Transaction System
 const { Client, GatewayIntentBits, Collection, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, REST, Routes } = require('discord.js');
 const { Pool } = require('pg');
 const cron = require('node-cron');
@@ -322,13 +322,12 @@ class ShopBot {
                 .setTitle('🛒 Transaction Updated')
                 .setDescription(`Transaction ID: ${transactionId}`)
                 .addFields(
-                    { name: 'Item', value: transaction.item_name, inline: true },
-                    { name: 'Quantity', value: transaction.quantity.toString(), inline: true },
-                    { name: 'Unit Price', value: `$${parseFloat(transaction.unit_price).toFixed(2)}`, inline: true },
-                    { name: 'Total Amount', value: `$${parseFloat(transaction.total_amount).toFixed(2)}`, inline: true },
-                    { name: 'Status', value: `${statusEmoji} ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`, inline: true },
                     { name: 'Buyer', value: `<@${transaction.user_id}>`, inline: true },
-                    { name: 'Updated By', value: `<@${interaction.user.id}>`, inline: true }
+                    { name: 'Item', value: transaction.item_name, inline: true },
+                    { name: 'Price', value: `$${parseFloat(transaction.total_amount).toFixed(2)}`, inline: true },
+                    { name: 'Status', value: `${statusEmoji} ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`, inline: true },
+                    { name: 'Updated By', value: `<@${interaction.user.id}>`, inline: true },
+                    { name: 'Updated At', value: new Date().toLocaleString(), inline: true }
                 )
                 .setColor(statusColor)
                 .setFooter({ text: `Transaction ${newStatus} by ${interaction.user.username}` })
