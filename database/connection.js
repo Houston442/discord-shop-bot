@@ -1,4 +1,4 @@
-// database/connection.js - Complete Clean File with Fixed Transaction Logic
+// database/connection.js - Complete File with Role Management System
 const { Pool } = require('pg');
 
 class Database {
@@ -66,13 +66,46 @@ class Database {
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`,
 
-            // Role selection configuration
-            `CREATE TABLE IF NOT EXISTS role_configs (
-                id SERIAL PRIMARY KEY,
-                channel_id VARCHAR(20) NOT NULL,
+            // Server roles table - stores all Discord roles
+            `CREATE TABLE IF NOT EXISTS server_roles (
+                role_id VARCHAR(20) PRIMARY KEY,
                 role_name VARCHAR(100) NOT NULL,
-                role_description TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                role_color INTEGER DEFAULT 0,
+                role_position INTEGER DEFAULT 0,
+                role_permissions BIGINT DEFAULT 0,
+                is_hoisted BOOLEAN DEFAULT FALSE,
+                is_mentionable BOOLEAN DEFAULT FALSE,
+                is_managed BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`,
+
+            // Role setups table - stores custom role menu configurations
+            `CREATE TABLE IF NOT EXISTS role_setups (
+                setup_id SERIAL PRIMARY KEY,
+                setup_name VARCHAR(100) NOT NULL,
+                channel_id VARCHAR(20),
+                message_id VARCHAR(20),
+                embed_title TEXT,
+                embed_description TEXT,
+                embed_thumbnail_url TEXT,
+                embed_image_url TEXT,
+                embed_color VARCHAR(7) DEFAULT '#0099FF',
+                embed_footer_text TEXT,
+                created_by VARCHAR(20),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`,
+
+            // Role setup options table - individual role options for each setup
+            `CREATE TABLE IF NOT EXISTS role_setup_options (
+                option_id SERIAL PRIMARY KEY,
+                setup_id INTEGER REFERENCES role_setups(setup_id) ON DELETE CASCADE,
+                option_label VARCHAR(100) NOT NULL,
+                option_description TEXT,
+                option_emoji VARCHAR(100),
+                discord_role_id VARCHAR(20) REFERENCES server_roles(role_id),
+                option_order INTEGER DEFAULT 0
             )`,
 
             // YouTube/Twitch creators
@@ -106,10 +139,17 @@ class Database {
     async setDefaultConfigs() {
         const defaultWelcome = "🎮 Welcome to our Game Shop Discord! 🎮\n\nHere you can browse and purchase in-game items safely. Check out our channels and don't forget to select your roles!\n\n⚠️ Remember: Always use our official trading system to stay protected from scammers.";
         
-        await this.pool.query(
-            'INSERT INTO bot_config (config_key, config_value) VALUES ($1, $2) ON CONFLICT (config_key) DO NOTHING',
-            ['welcome_message', defaultWelcome]
-        );
+        const configs = [
+            ['welcome_message', defaultWelcome],
+            ['auto_role', 'Tesco Clubcard']
+        ];
+
+        for (const [key, value] of configs) {
+            await this.pool.query(
+                'INSERT INTO bot_config (config_key, config_value) VALUES ($1, $2) ON CONFLICT (config_key) DO NOTHING',
+                [key, value]
+            );
+        }
     }
 
     // ==================== USER MANAGEMENT METHODS ====================
@@ -407,6 +447,187 @@ class Database {
         }
     }
 
+    // ==================== ROLE MANAGEMENT METHODS ====================
+
+    // Add or update a server role
+    async addServerRole(roleId, roleName, roleColor, rolePosition, rolePermissions, isHoisted, isMentionable, isManaged) {
+        try {
+            await this.pool.query(
+                `INSERT INTO server_roles (role_id, role_name, role_color, role_position, role_permissions, is_hoisted, is_mentionable, is_managed) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+                 ON CONFLICT (role_id) 
+                 DO UPDATE SET 
+                    role_name = EXCLUDED.role_name,
+                    role_color = EXCLUDED.role_color,
+                    role_position = EXCLUDED.role_position,
+                    role_permissions = EXCLUDED.role_permissions,
+                    is_hoisted = EXCLUDED.is_hoisted,
+                    is_mentionable = EXCLUDED.is_mentionable,
+                    is_managed = EXCLUDED.is_managed,
+                    updated_at = CURRENT_TIMESTAMP`,
+                [roleId, roleName, roleColor, rolePosition, rolePermissions, isHoisted, isMentionable, isManaged]
+            );
+        } catch (error) {
+            console.error('Error adding/updating server role:', error);
+            throw error;
+        }
+    }
+
+    // Remove a server role
+    async removeServerRole(roleId) {
+        try {
+            await this.pool.query(
+                'DELETE FROM server_roles WHERE role_id = $1',
+                [roleId]
+            );
+        } catch (error) {
+            console.error('Error removing server role:', error);
+            throw error;
+        }
+    }
+
+    // Get all server roles
+    async getAllServerRoles() {
+        try {
+            const result = await this.pool.query(
+                'SELECT * FROM server_roles ORDER BY role_position DESC'
+            );
+            return result.rows;
+        } catch (error) {
+            console.error('Error getting all server roles:', error);
+            return [];
+        }
+    }
+
+    // Get assignable roles (exclude @everyone, bot roles, etc.)
+    async getAssignableRoles() {
+        try {
+            const result = await this.pool.query(
+                'SELECT * FROM server_roles WHERE is_managed = FALSE AND role_name != \'@everyone\' ORDER BY role_position DESC'
+            );
+            return result.rows;
+        } catch (error) {
+            console.error('Error getting assignable roles:', error);
+            return [];
+        }
+    }
+
+    // Get role by name
+    async getRoleByName(roleName) {
+        try {
+            const result = await this.pool.query(
+                'SELECT * FROM server_roles WHERE role_name = $1',
+                [roleName]
+            );
+            return result.rows[0];
+        } catch (error) {
+            console.error('Error getting role by name:', error);
+            return null;
+        }
+    }
+
+    // ==================== ROLE SETUP METHODS ====================
+
+    // Create a new role setup
+    async createRoleSetup(setupName, createdBy, embedTitle, embedDescription, embedThumbnailUrl, embedImageUrl, embedColor, embedFooterText) {
+        try {
+            const result = await this.pool.query(
+                `INSERT INTO role_setups (setup_name, created_by, embed_title, embed_description, embed_thumbnail_url, embed_image_url, embed_color, embed_footer_text) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+                 RETURNING setup_id`,
+                [setupName, createdBy, embedTitle, embedDescription, embedThumbnailUrl, embedImageUrl, embedColor, embedFooterText]
+            );
+            return result.rows[0].setup_id;
+        } catch (error) {
+            console.error('Error creating role setup:', error);
+            throw error;
+        }
+    }
+
+    // Add option to role setup
+    async addRoleSetupOption(setupId, optionLabel, optionDescription, optionEmoji, discordRoleId, optionOrder) {
+        try {
+            await this.pool.query(
+                'INSERT INTO role_setup_options (setup_id, option_label, option_description, option_emoji, discord_role_id, option_order) VALUES ($1, $2, $3, $4, $5, $6)',
+                [setupId, optionLabel, optionDescription, optionEmoji, discordRoleId, optionOrder]
+            );
+        } catch (error) {
+            console.error('Error adding role setup option:', error);
+            throw error;
+        }
+    }
+
+    // Update role setup deployment info
+    async updateRoleSetupDeployment(setupId, channelId, messageId) {
+        try {
+            await this.pool.query(
+                'UPDATE role_setups SET channel_id = $2, message_id = $3, updated_at = CURRENT_TIMESTAMP WHERE setup_id = $1',
+                [setupId, channelId, messageId]
+            );
+        } catch (error) {
+            console.error('Error updating role setup deployment:', error);
+            throw error;
+        }
+    }
+
+    // Get role setup by ID
+    async getRoleSetup(setupId) {
+        try {
+            const result = await this.pool.query(
+                'SELECT * FROM role_setups WHERE setup_id = $1',
+                [setupId]
+            );
+            return result.rows[0];
+        } catch (error) {
+            console.error('Error getting role setup:', error);
+            return null;
+        }
+    }
+
+    // Get role setup options
+    async getRoleSetupOptions(setupId) {
+        try {
+            const result = await this.pool.query(
+                `SELECT rso.*, sr.role_name 
+                 FROM role_setup_options rso 
+                 LEFT JOIN server_roles sr ON rso.discord_role_id = sr.role_id 
+                 WHERE rso.setup_id = $1 
+                 ORDER BY rso.option_order`,
+                [setupId]
+            );
+            return result.rows;
+        } catch (error) {
+            console.error('Error getting role setup options:', error);
+            return [];
+        }
+    }
+
+    // Get all role setups
+    async getAllRoleSetups() {
+        try {
+            const result = await this.pool.query(
+                'SELECT rs.*, u.username as creator_name FROM role_setups rs LEFT JOIN users u ON rs.created_by = u.discord_id ORDER BY rs.created_at DESC'
+            );
+            return result.rows;
+        } catch (error) {
+            console.error('Error getting all role setups:', error);
+            return [];
+        }
+    }
+
+    // Delete role setup
+    async deleteRoleSetup(setupId) {
+        try {
+            await this.pool.query(
+                'DELETE FROM role_setups WHERE setup_id = $1',
+                [setupId]
+            );
+        } catch (error) {
+            console.error('Error deleting role setup:', error);
+            throw error;
+        }
+    }
+
     // ==================== MESSAGE LOGGING METHODS ====================
 
     // Log ONLY bot commands (messages starting with !)
@@ -493,6 +714,33 @@ class Database {
             );
         } catch (error) {
             console.error('Error setting welcome message:', error);
+            throw error;
+        }
+    }
+
+    // Get auto role
+    async getAutoRole() {
+        try {
+            const result = await this.pool.query(
+                'SELECT config_value FROM bot_config WHERE config_key = $1',
+                ['auto_role']
+            );
+            return result.rows[0]?.config_value;
+        } catch (error) {
+            console.error('Error getting auto role:', error);
+            return null;
+        }
+    }
+
+    // Set auto role
+    async setAutoRole(roleName) {
+        try {
+            await this.pool.query(
+                'INSERT INTO bot_config (config_key, config_value) VALUES ($1, $2) ON CONFLICT (config_key) DO UPDATE SET config_value = $2, updated_at = CURRENT_TIMESTAMP',
+                ['auto_role', roleName]
+            );
+        } catch (error) {
+            console.error('Error setting auto role:', error);
             throw error;
         }
     }
@@ -650,7 +898,7 @@ class Database {
     // Get backup data for all tables
     async getBackupData() {
         try {
-            const tables = ['users', 'transactions', 'messages', 'bot_config', 'creators', 'persistent_channels'];
+            const tables = ['users', 'transactions', 'messages', 'bot_config', 'creators', 'persistent_channels', 'server_roles', 'role_setups', 'role_setup_options'];
             const backupData = {};
             
             for (const table of tables) {
@@ -671,7 +919,7 @@ class Database {
             const stats = {};
             
             // Table row counts
-            const tables = ['users', 'transactions', 'messages', 'creators', 'persistent_channels'];
+            const tables = ['users', 'transactions', 'messages', 'creators', 'persistent_channels', 'server_roles', 'role_setups'];
             for (const table of tables) {
                 const result = await this.pool.query(`SELECT COUNT(*) as count FROM ${table}`);
                 stats[`${table}_count`] = parseInt(result.rows[0].count);
