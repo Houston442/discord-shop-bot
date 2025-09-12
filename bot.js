@@ -1,4 +1,4 @@
-// bot.js - Updated with Button Interaction Handling for Transaction System
+// bot.js - Updated with Role System and Auto-Role Assignment
 const { Client, GatewayIntentBits, Collection, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, REST, Routes } = require('discord.js');
 const { Pool } = require('pg');
 const cron = require('node-cron');
@@ -26,6 +26,7 @@ class ShopBot {
         
         this.commands = new Collection();
         this.persistentMessages = new Map();
+        this.roleSetupSessions = new Map(); // Store ongoing role setup sessions
         
         this.loadCommands();
         this.setupEventHandlers();
@@ -106,16 +107,30 @@ class ShopBot {
             try {
                 await this.database.initialize();
                 await this.loadPersistentMessages();
+                await this.syncAllRolesOnStartup();
                 await this.registerSlashCommands();
-                console.log('Database initialized, persistent messages loaded, and slash commands registered');
+                console.log('Database initialized, roles synced, persistent messages loaded, and slash commands registered');
             } catch (error) {
                 console.error('Error during bot initialization:', error);
             }
         });
 
-        // Guild member add (Auto Join DM)
+        // Guild member add (Auto Join DM + Auto Role)
         this.client.on('guildMemberAdd', async (member) => {
             await this.handleMemberJoin(member);
+        });
+
+        // Role events for automatic syncing
+        this.client.on('roleCreate', async (role) => {
+            await this.handleRoleCreate(role);
+        });
+
+        this.client.on('roleUpdate', async (oldRole, newRole) => {
+            await this.handleRoleUpdate(oldRole, newRole);
+        });
+
+        this.client.on('roleDelete', async (role) => {
+            await this.handleRoleDelete(role);
         });
 
         // Message create (Activity tracking & Persistent messages)
@@ -166,7 +181,7 @@ class ShopBot {
         }
 
         try {
-            await command.execute(interaction, this.database);
+            await command.execute(interaction, this.database, this);
         } catch (error) {
             console.error(`Error executing ${interaction.commandName}:`, error);
             const errorMessage = 'There was an error while executing this command!';
@@ -186,6 +201,9 @@ class ShopBot {
             // Add user to database
             await this.database.addUser(member.user.id, member.user.username, member.user.discriminator);
             
+            // Auto-assign role
+            await this.assignAutoRole(member);
+            
             // Get welcome message from database
             const welcomeMessage = await this.database.getWelcomeMessage();
             
@@ -201,6 +219,102 @@ class ShopBot {
             
         } catch (error) {
             console.error('Error handling member join:', error);
+        }
+    }
+
+    async assignAutoRole(member) {
+        try {
+            const autoRoleName = await this.database.getAutoRole();
+            if (!autoRoleName) return;
+
+            const role = member.guild.roles.cache.find(r => r.name === autoRoleName);
+            if (!role) {
+                console.log(`Auto-role "${autoRoleName}" not found in server`);
+                return;
+            }
+
+            await member.roles.add(role);
+            console.log(`Assigned auto-role "${autoRoleName}" to ${member.user.username}`);
+            
+        } catch (error) {
+            console.error('Error assigning auto role:', error);
+        }
+    }
+
+    async syncAllRolesOnStartup() {
+        try {
+            const guilds = this.client.guilds.cache;
+            for (const [guildId, guild] of guilds) {
+                await this.syncGuildRoles(guild);
+            }
+        } catch (error) {
+            console.error('Error syncing roles on startup:', error);
+        }
+    }
+
+    async syncGuildRoles(guild) {
+        try {
+            const roles = guild.roles.cache;
+            for (const [roleId, role] of roles) {
+                await this.database.addServerRole(
+                    role.id,
+                    role.name,
+                    role.color,
+                    role.position,
+                    role.permissions.bitfield.toString(),
+                    role.hoist,
+                    role.mentionable,
+                    role.managed
+                );
+            }
+            console.log(`Synced ${roles.size} roles for guild ${guild.name}`);
+        } catch (error) {
+            console.error('Error syncing guild roles:', error);
+        }
+    }
+
+    async handleRoleCreate(role) {
+        try {
+            await this.database.addServerRole(
+                role.id,
+                role.name,
+                role.color,
+                role.position,
+                role.permissions.bitfield.toString(),
+                role.hoist,
+                role.mentionable,
+                role.managed
+            );
+            console.log(`Role created and synced: ${role.name}`);
+        } catch (error) {
+            console.error('Error handling role create:', error);
+        }
+    }
+
+    async handleRoleUpdate(oldRole, newRole) {
+        try {
+            await this.database.addServerRole(
+                newRole.id,
+                newRole.name,
+                newRole.color,
+                newRole.position,
+                newRole.permissions.bitfield.toString(),
+                newRole.hoist,
+                newRole.mentionable,
+                newRole.managed
+            );
+            console.log(`Role updated and synced: ${newRole.name}`);
+        } catch (error) {
+            console.error('Error handling role update:', error);
+        }
+    }
+
+    async handleRoleDelete(role) {
+        try {
+            await this.database.removeServerRole(role.id);
+            console.log(`Role deleted and removed from database: ${role.name}`);
+        } catch (error) {
+            console.error('Error handling role delete:', error);
         }
     }
 
@@ -257,21 +371,52 @@ class ShopBot {
 
     async handleRoleSelection(interaction) {
         try {
-            const selectedRole = interaction.values[0];
-            const member = interaction.member;
-            const guild = interaction.guild;
-            
-            const role = guild.roles.cache.find(r => r.name === selectedRole);
-            if (!role) {
-                return await interaction.reply({ content: 'Role not found!', ephemeral: true });
-            }
+            if (interaction.customId.startsWith('role_setup_')) {
+                // Handle custom role setup selections
+                const setupId = interaction.customId.split('_')[2];
+                const selectedValue = interaction.values[0];
+                
+                // Get the role setup option
+                const options = await this.database.getRoleSetupOptions(setupId);
+                const selectedOption = options.find(opt => opt.option_id.toString() === selectedValue);
+                
+                if (!selectedOption) {
+                    return await interaction.reply({ content: 'Role option not found!', ephemeral: true });
+                }
+                
+                const member = interaction.member;
+                const guild = interaction.guild;
+                const role = guild.roles.cache.get(selectedOption.discord_role_id);
+                
+                if (!role) {
+                    return await interaction.reply({ content: 'Role not found!', ephemeral: true });
+                }
 
-            if (member.roles.cache.has(role.id)) {
-                await member.roles.remove(role);
-                await interaction.reply({ content: `Removed role: ${role.name}`, ephemeral: true });
+                if (member.roles.cache.has(role.id)) {
+                    await member.roles.remove(role);
+                    await interaction.reply({ content: `Removed role: ${role.name}`, ephemeral: true });
+                } else {
+                    await member.roles.add(role);
+                    await interaction.reply({ content: `Added role: ${role.name}`, ephemeral: true });
+                }
             } else {
-                await member.roles.add(role);
-                await interaction.reply({ content: `Added role: ${role.name}`, ephemeral: true });
+                // Handle legacy role selection (if any old role menus exist)
+                const selectedRole = interaction.values[0];
+                const member = interaction.member;
+                const guild = interaction.guild;
+                
+                const role = guild.roles.cache.find(r => r.name === selectedRole);
+                if (!role) {
+                    return await interaction.reply({ content: 'Role not found!', ephemeral: true });
+                }
+
+                if (member.roles.cache.has(role.id)) {
+                    await member.roles.remove(role);
+                    await interaction.reply({ content: `Removed role: ${role.name}`, ephemeral: true });
+                } else {
+                    await member.roles.add(role);
+                    await interaction.reply({ content: `Added role: ${role.name}`, ephemeral: true });
+                }
             }
         } catch (error) {
             console.error('Error handling role selection:', error);
@@ -498,20 +643,4 @@ process.on('SIGINT', async () => {
         await bot.shutdown();
     }
     process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-    console.log('Received SIGTERM, shutting down gracefully...');
-    if (bot) {
-        await bot.shutdown();
-    }
-    process.exit(0);
-});
-
-// Start the bot
-console.log('Initializing Discord Shop Bot...');
-const bot = new ShopBot();
-bot.start().catch(error => {
-    console.error('Fatal error starting bot:', error);
-    process.exit(1);
 });
