@@ -1,4 +1,4 @@
-// database/connection.js - Complete Database Connection and Management with Seller Tracking
+// database/connection.js - Complete Clean File with Fixed Transaction Logic
 const { Pool } = require('pg');
 
 class Database {
@@ -282,8 +282,8 @@ class Database {
 
     // ==================== TRANSACTION METHODS ====================
 
-    // Add new transaction with seller tracking
-        async addTransaction(userId, itemName, quantity, unitPrice, totalAmount, createdBy = null) {
+    // Add new transaction - FIXED: Don't update buyer stats immediately
+    async addTransaction(userId, itemName, quantity, unitPrice, totalAmount, createdBy = null) {
         try {
             const result = await this.pool.query(
                 'INSERT INTO transactions (user_id, item_name, quantity, unit_price, total_amount, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING transaction_id',
@@ -298,8 +298,8 @@ class Database {
             throw error;
         }
     }
-    
-    // Updated updateTransactionStatus method - update stats based on status
+
+    // Update transaction status - FIXED: Update stats based on status
     async updateTransactionStatus(transactionId, status) {
         try {
             // Get transaction details first
@@ -356,6 +356,20 @@ class Database {
         }
     }
 
+    // Get user transactions
+    async getUserTransactions(userId) {
+        try {
+            const result = await this.pool.query(
+                'SELECT * FROM transactions WHERE user_id = $1 ORDER BY timestamp DESC',
+                [userId]
+            );
+            return result.rows;
+        } catch (error) {
+            console.error('Error getting user transactions:', error);
+            throw error;
+        }
+    }
+
     // Get all transactions (admin use)
     async getAllTransactions(limit = 50) {
         try {
@@ -394,7 +408,6 @@ class Database {
     }
 
     // ==================== MESSAGE LOGGING METHODS ====================
-    // MODIFIED: Now only logs commands, not all messages
 
     // Log ONLY bot commands (messages starting with !)
     async logMessage(messageId, userId, channelId, content, commandUsed = null) {
