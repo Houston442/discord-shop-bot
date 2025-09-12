@@ -1,5 +1,6 @@
-// commands/roles.js - Slash Command Version
+// commands/roles.js - Fixed Syntax Error
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, PermissionFlagsBits } = require('discord.js');
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('setup')
@@ -9,23 +10,24 @@ module.exports = {
             subcommand
                 .setName('roles')
                 .setDescription('Create role selection menu')),
-
+    
     async execute(interaction, database) {
         const subcommand = interaction.options.getSubcommand();
-
+        
         switch (subcommand) {
             case 'roles':
                 await this.setupRoleSelection(interaction);
                 break;
         }
     },
+
     async setupRoleSelection(interaction) {
         try {
             const embed = new EmbedBuilder()
                 .setTitle('🎭 Role Selection')
                 .setDescription('Choose your roles from the dropdown below!')
-                .setColor('
-#0099FF');
+                .setColor('#0099FF');
+
             const selectMenu = new StringSelectMenuBuilder()
                 .setCustomId('role_select')
                 .setPlaceholder('Select your roles...')
@@ -63,13 +65,14 @@ module.exports = {
                         emoji: '📢'
                     }
                 ]);
-            const row = new ActionRowBuilder().addComponents(selectMenu);
 
+            const row = new ActionRowBuilder().addComponents(selectMenu);
+            
             await interaction.reply({
                 embeds: [embed],
                 components: [row]
             });
-
+            
         } catch (error) {
             console.error('Error setting up role selection:', error);
             await interaction.reply({ 
