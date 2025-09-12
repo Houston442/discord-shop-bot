@@ -1,4 +1,4 @@
-// commands/admin.js - Final Clean Version
+// commands/admin.js - With Creator Monitoring Removed
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
@@ -105,50 +105,6 @@ module.exports = {
                         .setRequired(true)))
         .addSubcommand(subcommand =>
             subcommand
-                .setName('addcreator')
-                .setDescription('Add creator for monitoring using URL or ID')
-                .addStringOption(option =>
-                    option.setName('platform')
-                        .setDescription('Platform type')
-                        .setRequired(true)
-                        .addChoices(
-                            { name: 'YouTube', value: 'youtube' },
-                            { name: 'Twitch', value: 'twitch' }
-                        ))
-                .addStringOption(option =>
-                    option.setName('url_or_id')
-                        .setDescription('YouTube/Twitch URL or channel ID/username')
-                        .setRequired(true))
-                .addChannelOption(option =>
-                    option.setName('channel')
-                        .setDescription('Discord channel to post notifications')
-                        .setRequired(true))
-                .addStringOption(option =>
-                    option.setName('creator_name')
-                        .setDescription('Display name for the creator (optional)')
-                        .setRequired(false)))
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('removecreator')
-                .setDescription('Stop monitoring a creator')
-                .addStringOption(option =>
-                    option.setName('platform')
-                        .setDescription('Platform type')
-                        .setRequired(true)
-                        .addChoices(
-                            { name: 'YouTube', value: 'youtube' },
-                            { name: 'Twitch', value: 'twitch' }
-                        ))
-                .addStringOption(option =>
-                    option.setName('creator_id')
-                        .setDescription('Creator ID or username')
-                        .setRequired(true)))
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('listcreators')
-                .setDescription('Show all monitored creators'))
-        .addSubcommand(subcommand =>
-            subcommand
                 .setName('backup')
                 .setDescription('Manually trigger database backup'))
         .addSubcommand(subcommand =>
@@ -203,15 +159,6 @@ module.exports = {
                 break;
             case 'removepersistent':
                 await this.removePersistentChannel(interaction, database);
-                break;
-            case 'addcreator':
-                await this.addCreator(interaction, database);
-                break;
-            case 'removecreator':
-                await this.removeCreator(interaction, database);
-                break;
-            case 'listcreators':
-                await this.listCreators(interaction, database);
                 break;
             case 'backup':
                 await this.manualBackup(interaction, database);
@@ -562,130 +509,6 @@ module.exports = {
         }
     },
 
-    async addCreator(interaction, database) {
-        const platform = interaction.options.getString('platform');
-        const urlOrId = interaction.options.getString('url_or_id');
-        const customName = interaction.options.getString('creator_name');
-        const channel = interaction.options.getChannel('channel');
-        
-        try {
-            await interaction.deferReply();
-            
-            let creatorId;
-            let creatorName;
-            
-            if (platform === 'youtube') {
-                // Simple extraction for YouTube
-                if (urlOrId.startsWith('UC') && urlOrId.length === 24) {
-                    creatorId = urlOrId;
-                } else if (urlOrId.includes('youtube.com') || urlOrId.includes('youtu.be')) {
-                    const match = urlOrId.match(/(?:youtube\.com\/channel\/|youtube\.com\/@)([^\/\?]+)/);
-                    if (match) {
-                        creatorId = match[1];
-                    }
-                }
-                creatorName = customName || 'YouTube Creator';
-                
-            } else if (platform === 'twitch') {
-                // Simple extraction for Twitch
-                if (urlOrId.includes('twitch.tv')) {
-                    const match = urlOrId.match(/twitch\.tv\/([^\/\?]+)/);
-                    if (match) {
-                        creatorId = match[1].toLowerCase();
-                    }
-                } else {
-                    creatorId = urlOrId.toLowerCase().replace('@', '');
-                }
-                creatorName = customName || creatorId;
-            }
-            
-            if (!creatorId) {
-                return await interaction.editReply('❌ Could not extract creator ID from the provided input.');
-            }
-            
-            // Check if creator already exists
-            const existingCreators = await database.getCreators(platform);
-            const existingCreator = existingCreators.find(c => c.creator_id === creatorId);
-            
-            if (existingCreator) {
-                return await interaction.editReply(`❌ Creator **${existingCreator.creator_name}** is already being monitored.`);
-            }
-            
-            await database.addCreator(platform, creatorId, creatorName, channel.id);
-            
-            const embed = new EmbedBuilder()
-                .setTitle('✅ Creator Added Successfully')
-                .addFields(
-                    { name: 'Platform', value: platform === 'youtube' ? 'YouTube' : 'Twitch', inline: true },
-                    { name: 'Creator', value: creatorName, inline: true },
-                    { name: 'Channel', value: `<#${channel.id}>`, inline: true },
-                    { name: 'Creator ID', value: creatorId, inline: true }
-                )
-                .setColor('#00FF00')
-                .setTimestamp();
-                
-            await interaction.editReply({ embeds: [embed] });
-            
-        } catch (error) {
-            console.error('Error adding creator:', error);
-            await interaction.editReply('❌ Error adding creator.');
-        }
-    },
-
-    async removeCreator(interaction, database) {
-        const platform = interaction.options.getString('platform');
-        const creatorId = interaction.options.getString('creator_id');
-        
-        try {
-            await database.removeCreator(platform, creatorId);
-            await interaction.reply(`✅ Removed ${platform} creator: **${creatorId}**`);
-        } catch (error) {
-            console.error('Error removing creator:', error);
-            await interaction.reply('❌ Error removing creator.');
-        }
-    },
-
-    async listCreators(interaction, database) {
-        try {
-            const youtubeCreators = await database.getCreators('youtube');
-            const twitchCreators = await database.getCreators('twitch');
-
-            const embed = new EmbedBuilder()
-                .setTitle('🎥 Monitored Creators')
-                .setColor('#0099FF');
-
-            if (youtubeCreators.length > 0) {
-                embed.addFields({
-                    name: '📺 YouTube Creators',
-                    value: youtubeCreators.map(c => 
-                        `**${c.creator_name}** (${c.creator_id}) → <#${c.channel_id}>`
-                    ).join('\n'),
-                    inline: false
-                });
-            }
-
-            if (twitchCreators.length > 0) {
-                embed.addFields({
-                    name: '🟣 Twitch Streamers',
-                    value: twitchCreators.map(c => 
-                        `**${c.creator_name}** (${c.creator_id}) → <#${c.channel_id}> ${c.is_live ? '🔴 LIVE' : '⚫ Offline'}`
-                    ).join('\n'),
-                    inline: false
-                });
-            }
-
-            if (youtubeCreators.length === 0 && twitchCreators.length === 0) {
-                embed.setDescription('No creators are currently being monitored.');
-            }
-
-            await interaction.reply({ embeds: [embed] });
-
-        } catch (error) {
-            console.error('Error listing creators:', error);
-            await interaction.reply('❌ Error retrieving creators list.');
-        }
-    },
-
     async manualBackup(interaction, database) {
         try {
             await interaction.deferReply();
@@ -713,7 +536,6 @@ module.exports = {
                     { name: 'Users', value: `${stats.users_count || 0}`, inline: true },
                     { name: 'Transactions', value: `${stats.transactions_count || 0}`, inline: true },
                     { name: 'Messages', value: `${stats.messages_count || 0}`, inline: true },
-                    { name: 'Creators', value: `${stats.creators_count || 0}`, inline: true },
                     { name: 'Revenue', value: `$${(stats.total_revenue || 0).toFixed(2)}`, inline: true }
                 )
                 .setColor('#00FF99')
