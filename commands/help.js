@@ -1,215 +1,169 @@
-// commands/help.js - Complete Help Command
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+// commands/help.js - Updated Help for New Command Structure
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('help')
-        .setDescription('Display all available bot commands and their usage'),
+        .setDescription('Display all available bot commands and their usage')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
     
     async execute(interaction, database) {
         try {
             const embed = new EmbedBuilder()
-                .setTitle('🤖 Discord Shop Bot - Complete Command Guide')
-                .setDescription('All available slash commands and their usage:')
+                .setTitle('🤖 Discord Shop Bot - Admin Commands Guide')
+                .setDescription('All available admin-only commands and their usage:')
                 .addFields(
-                    // Shop Commands Section
+                    // Transaction Commands Section
                     { 
-                        name: '🛒 **SHOP COMMANDS**', 
+                        name: '💰 **TRANSACTION COMMANDS**', 
                         value: '```' +
-                        '/shop buy <item> <price> [quantity]\n' +
-                        '/shop history\n' +
-                        '/shop status <transaction_id>\n' +
+                        '/buy @user <item> <price>\n' +
+                        '/history [user]\n' +
+                        '/status <transaction_id>\n' +
                         '```', 
                         inline: false 
                     },
                     { 
-                        name: '📝 Shop Command Details', 
+                        name: '📝 Transaction Command Details', 
                         value: 
-                        '**`/shop buy`** - Create a new transaction for an item\n' +
-                        '**`/shop history`** - View your personal transaction history\n' +
-                        '**`/shop status`** - Check the status of a specific transaction\n',
+                        '**`/buy`** - Create a new transaction for a user with Complete/Cancel buttons\n' +
+                        '   • Creates transaction that can be completed or cancelled via buttons\n' +
+                        '   • Automatically checks if user is flagged as scammer\n' +
+                        '**`/history`** - View all recent transactions or for specific user\n' +
+                        '**`/status`** - Check detailed status of a specific transaction\n',
                         inline: false 
                     },
 
-                    // Admin Commands Section
+                    // User Management Section
                     { 
-                        name: '👥 **ADMIN COMMANDS - USER MANAGEMENT**', 
+                        name: '👥 **USER MANAGEMENT COMMANDS**', 
                         value: '```' +
-                        '/admin syncmembers\n' +
-                        '/admin checkuser @user\n' +
-                        '/admin stats\n' +
+                        '/syncmembers\n' +
+                        '/checkuser @user\n' +
+                        '/stats\n' +
                         '```', 
                         inline: false 
                     },
                     { 
                         name: '📝 User Management Details', 
                         value: 
-                        '**`/admin syncmembers`** - Add all Discord server members to database\n' +
-                        '**`/admin checkuser`** - View detailed user info, transactions, and activity\n' +
-                        '**`/admin stats`** - Show server statistics and database overview\n',
+                        '**`/syncmembers`** - Add all Discord server members to database\n' +
+                        '**`/checkuser`** - View detailed user info, transactions, and activity\n' +
+                        '**`/stats`** - Show server statistics and database overview\n',
                         inline: false 
                     },
 
                     // Scammer Management Section
                     { 
-                        name: '🚨 **ADMIN COMMANDS - SCAMMER MANAGEMENT**', 
+                        name: '🚨 **SCAMMER MANAGEMENT COMMANDS**', 
                         value: '```' +
-                        '/admin flagscammer @user [reason]\n' +
-                        '/admin unflagscammer @user\n' +
-                        '/admin scammerlist\n' +
+                        '/flagscammer @user [reason]\n' +
+                        '/unflagscammer @user\n' +
+                        '/scammerlist\n' +
                         '```', 
                         inline: false 
                     },
                     { 
                         name: '📝 Scammer Management Details', 
                         value: 
-                        '**`/admin flagscammer`** - Flag user as scammer with optional reason\n' +
-                        '**`/admin unflagscammer`** - Remove scammer flag from user\n' +
-                        '**`/admin scammerlist`** - Display all flagged scammers with notes\n',
-                        inline: false 
-                    },
-
-                    // Transaction Management Section
-                    { 
-                        name: '💰 **ADMIN COMMANDS - TRANSACTION MANAGEMENT**', 
-                        value: '```' +
-                        '/admin updatetransaction <id> <status>\n' +
-                        '/admin alltransactions\n' +
-                        '/admin pendingtransactions\n' +
-                        '```', 
-                        inline: false 
-                    },
-                    { 
-                        name: '📝 Transaction Management Details', 
-                        value: 
-                        '**`/admin updatetransaction`** - Update transaction status\n' +
-                        '   • Status options: pending, completed, failed, disputed, cancelled\n' +
-                        '**`/admin alltransactions`** - View all recent transactions\n' +
-                        '**`/admin pendingtransactions`** - View only pending transactions\n',
+                        '**`/flagscammer`** - Flag user as scammer with optional reason\n' +
+                        '   • Flagged users cannot make new transactions\n' +
+                        '**`/unflagscammer`** - Remove scammer flag from user\n' +
+                        '**`/scammerlist`** - Display all flagged scammers with notes\n',
                         inline: false 
                     },
 
                     // Message Commands Section
                     { 
-                        name: '📝 **MESSAGE COMMANDS** (Admin Only)', 
+                        name: '📝 **MESSAGE COMMANDS**', 
                         value: '```' +
-                        '/message send <content>\n' +
-                        '/message edit <message_id> <content>\n' +
-                        '/message embed <title> <description> [color]\n' +
-                        '/message channel #channel <content>\n' +
-                        '/message dm @user <content>\n' +
-                        '/message announce <everyone|here> <content>\n' +
+                        '/send <content>\n' +
+                        '/edit <message_id> <content>\n' +
+                        '/embed <title> <description> [color]\n' +
+                        '/sendchannel #channel <content>\n' +
+                        '/senddm @user <content>\n' +
+                        '/announce <everyone|here> <content>\n' +
                         '```', 
                         inline: false 
                     },
                     { 
                         name: '📝 Message Command Details', 
                         value: 
-                        '**`/message send`** - Send message in current channel with emoji support\n' +
-                        '**`/message edit`** - Edit existing bot message by ID\n' +
-                        '**`/message embed`** - Send rich embedded message\n' +
-                        '**`/message channel`** - Send message to specific channel\n' +
-                        '**`/message dm`** - Send direct message to user\n' +
-                        '**`/message announce`** - Send announcement with @everyone/@here\n',
+                        '**`/send`** - Send message in current channel with emoji support\n' +
+                        '**`/edit`** - Edit existing bot message by ID\n' +
+                        '**`/embed`** - Send rich embedded message with custom color\n' +
+                        '**`/sendchannel`** - Send message to specific channel\n' +
+                        '**`/senddm`** - Send direct message to user\n' +
+                        '**`/announce`** - Send announcement with @everyone/@here\n',
                         inline: false 
                     },
 
                     // Bot Configuration Section
                     { 
-                        name: '⚙️ **ADMIN COMMANDS - BOT CONFIGURATION**', 
+                        name: '⚙️ **BOT CONFIGURATION COMMANDS**', 
                         value: '```' +
-                        '/admin setwelcome <message>\n' +
-                        '/admin setpersistent #channel <message>\n' +
-                        '/admin removepersistent #channel\n' +
+                        '/setwelcome <message>\n' +
+                        '/setpersistent #channel <message>\n' +
+                        '/removepersistent #channel\n' +
+                        '/roles\n' +
                         '```', 
                         inline: false 
                     },
                     { 
                         name: '📝 Bot Configuration Details', 
                         value: 
-                        '**`/admin setwelcome`** - Set welcome DM for new members\n' +
-                        '**`/admin setpersistent`** - Message always stays last in channel\n' +
-                        '**`/admin removepersistent`** - Remove persistent message\n',
-                        inline: false 
-                    },
-
-                    // Content Monitoring Section
-                    { 
-                        name: '🎥 **ADMIN COMMANDS - CONTENT MONITORING**', 
-                        value: '```' +
-                        '/admin addcreator <platform> <id> <name> #channel\n' +
-                        '/admin removecreator <platform> <id>\n' +
-                        '/admin listcreators\n' +
-                        '```', 
-                        inline: false 
-                    },
-                    { 
-                        name: '📝 Content Monitoring Details', 
-                        value: 
-                        '**`/admin addcreator`** - Add YouTube/Twitch creator for monitoring\n' +
-                        '   • Platform: youtube or twitch\n' +
-                        '   • Auto-post when creator uploads/goes live\n' +
-                        '**`/admin removecreator`** - Stop monitoring creator\n' +
-                        '**`/admin listcreators`** - Show all monitored creators\n',
+                        '**`/setwelcome`** - Set welcome DM message for new members\n' +
+                        '**`/setpersistent`** - Set message that always stays last in channel\n' +
+                        '**`/removepersistent`** - Remove persistent message from channel\n' +
+                        '**`/roles`** - Create interactive role selection menu\n',
                         inline: false 
                     },
 
                     // Database & System Section
                     { 
-                        name: '💾 **ADMIN COMMANDS - DATABASE & SYSTEM**', 
+                        name: '💾 **DATABASE & SYSTEM COMMANDS**', 
                         value: '```' +
-                        '/admin backup\n' +
-                        '/admin dbstats\n' +
-                        '/admin testdb\n' +
-                        '/admin cleanup\n' +
+                        '/backup\n' +
+                        '/dbstats\n' +
+                        '/testdb\n' +
+                        '/cleanup\n' +
                         '```', 
                         inline: false 
                     },
                     { 
                         name: '📝 Database & System Details', 
                         value: 
-                        '**`/admin backup`** - Manually trigger database backup\n' +
-                        '**`/admin dbstats`** - Show detailed database statistics\n' +
-                        '**`/admin testdb`** - Test database connection\n' +
-                        '**`/admin cleanup`** - Clean old messages/data (30+ days)\n',
+                        '**`/backup`** - Manually trigger database backup\n' +
+                        '**`/dbstats`** - Show detailed database statistics\n' +
+                        '**`/testdb`** - Test database connection and response time\n' +
+                        '**`/cleanup`** - Clean old messages/data (30+ days)\n',
                         inline: false 
                     },
 
-                    // Setup Commands Section
+                    // Transaction Workflow Section
                     { 
-                        name: '🎭 **SETUP COMMANDS** (Admin Only)', 
-                        value: '```' +
-                        '/setup roles\n' +
-                        '```', 
-                        inline: false 
-                    },
-                    { 
-                        name: '📝 Setup Command Details', 
+                        name: '🔄 **TRANSACTION WORKFLOW**', 
                         value: 
-                        '**`/setup roles`** - Create interactive role selection menu\n' +
-                        '   • Users can select: Buyer, Seller, Notifications, VIP, Updates\n',
+                        '**Step 1:** Use `/buy @user item_name price` to create transaction\n' +
+                        '**Step 2:** Transaction message appears with Complete ✅ and Cancel ❌ buttons\n' +
+                        '**Step 3:** Click appropriate button to update transaction status\n' +
+                        '**Step 4:** Use `/history` or `/status` to view transaction details\n\n' +
+                        '**Button Actions:**\n' +
+                        '• ✅ **Complete** - Marks transaction as completed\n' +
+                        '• ❌ **Cancel** - Marks transaction as cancelled\n' +
+                        '• Buttons disappear after use and embed updates with new status\n',
                         inline: false 
                     },
 
-                    // Emoji Support Section
+                    // Custom Emoji Support Section
                     { 
                         name: '😀 **CUSTOM EMOJI SUPPORT**', 
                         value: 
-                        '**Custom Server Emojis:** Use `:emoji_name:` format in message commands\n' +
+                        '**Server Emojis:** Use `:emoji_name:` format in message commands\n' +
                         '   • Example: `:shop_icon:`, `:verified:`, `:diamond:`, `:warning_sign:`\n' +
                         '   • Works in: welcome messages, persistent messages, all message commands\n\n' +
                         '**Unicode Emojis:** Work normally everywhere\n' +
                         '   • Example: 🛒 💎 ⚠️ ✅ ❌ 🔔 🎉 ❤️ 🔥 ⭐ 💰 🛡️\n',
-                        inline: false 
-                    },
-
-                    // Permission Notes Section
-                    { 
-                        name: '🔐 **PERMISSION REQUIREMENTS**', 
-                        value: 
-                        '**Everyone:** `/shop` commands, `/help`\n' +
-                        '**Admin Only:** `/admin` commands, `/message` commands, `/setup` commands\n' +
-                        '**Note:** Admin commands require Discord Administrator permission\n',
                         inline: false 
                     },
 
@@ -218,17 +172,32 @@ module.exports = {
                         name: '💡 **QUICK EXAMPLES**', 
                         value: 
                         '```\n' +
-                        '# Buy an item\n' +
-                        '/shop buy Dragon Sword 25.99 1\n\n' +
+                        '# Create a transaction\n' +
+                        '/buy @JohnDoe Dragon Sword 25.99\n\n' +
+                        '# Check transaction history for specific user\n' +
+                        '/history @JohnDoe\n\n' +
                         '# Send message with custom emoji\n' +
-                        '/message send Welcome! :shop_icon: Check our deals :fire:\n\n' +
+                        '/send Welcome! :shop_icon: Check our deals :fire:\n\n' +
                         '# Create embed announcement\n' +
-                        '/message embed "Shop Update" "New items added!" #00FF00\n\n' +
+                        '/embed "Shop Update" "New items added!" #00FF00\n\n' +
                         '# Flag a scammer\n' +
-                        '/admin flagscammer @user Tried to scam other members\n\n' +
+                        '/flagscammer @user Attempted to scam other members\n\n' +
                         '# Set welcome message\n' +
-                        '/admin setwelcome Welcome to our shop! :diamond: Read #rules\n' +
+                        '/setwelcome Welcome to our shop! :diamond: Read the rules\n' +
                         '```',
+                        inline: false 
+                    },
+
+                    // Important Notes Section
+                    { 
+                        name: '⚠️ **IMPORTANT NOTES**', 
+                        value: 
+                        '• **All commands are admin-only** - Requires Discord Administrator permission\n' +
+                        '• **Simplified transaction system** - Only Complete/Cancel status via buttons\n' +
+                        '• **Scammer protection** - Flagged users cannot make transactions\n' +
+                        '• **Button interactions** - Complete/Cancel buttons update transaction status immediately\n' +
+                        '• **Automatic user registration** - Users added to database when mentioned in transactions\n' +
+                        '• **Daily backups** - Automatic database backups at midnight GMT\n',
                         inline: false 
                     },
 
@@ -237,15 +206,15 @@ module.exports = {
                         name: '❓ **NEED MORE HELP?**', 
                         value: 
                         '• Use Discord\'s auto-complete by typing `/` and selecting commands\n' +
-                        '• Required parameters are marked as such in Discord\n' +
+                        '• Required parameters are shown in Discord\'s command interface\n' +
                         '• Optional parameters are shown in [brackets] above\n' +
-                        '• Contact server administrators for additional support\n',
+                        '• All commands are admin-only for security and control\n',
                         inline: false 
                     }
                 )
                 .setColor('#0099FF')
                 .setFooter({ 
-                    text: 'Discord Shop Bot | Type / to see available commands with auto-complete' 
+                    text: 'Discord Shop Bot | All commands are admin-only | Type / to see available commands' 
                 })
                 .setTimestamp();
                 
