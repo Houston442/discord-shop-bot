@@ -72,8 +72,7 @@ module.exports = {
             const embed = new EmbedBuilder()
                 .setTitle(setup.embed_title || 'Role Selection')
                 .setDescription(setup.embed_description || 'Select your roles from the dropdown below!')
-                .setColor(setup.embed_color || '#0099FF')
-                .setTimestamp();
+                .setColor(setup.embed_color || '#0099FF');
                 
             if (setup.embed_thumbnail_url) {
                 embed.setThumbnail(setup.embed_thumbnail_url);
@@ -150,8 +149,7 @@ module.exports = {
             const embed = new EmbedBuilder()
                 .setTitle(setup.embed_title || 'Role Selection')
                 .setDescription(setup.embed_description || 'Select your roles from the dropdown below!')
-                .setColor(setup.embed_color || '#0099FF')
-                .setTimestamp();
+                .setColor(setup.embed_color || '#0099FF');
                 
             if (setup.embed_thumbnail_url) {
                 embed.setThumbnail(setup.embed_thumbnail_url);
