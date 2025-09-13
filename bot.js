@@ -1,4 +1,4 @@
-// bot.js - Updated with Role System and Auto-Role Assignment
+// bot.js - Complete Clean Version with All Updates
 const { Client, GatewayIntentBits, Collection, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, REST, Routes } = require('discord.js');
 const { Pool } = require('pg');
 const cron = require('node-cron');
@@ -63,7 +63,6 @@ class ShopBot {
 
             console.log(`Started refreshing ${commands.length} application (/) commands.`);
 
-            // Register commands to specific guild first (appears immediately)
             if (process.env.GUILD_ID) {
                 try {
                     const guildData = await rest.put(
@@ -78,7 +77,6 @@ class ShopBot {
                 console.log('GUILD_ID not set - skipping guild-specific registration');
             }
 
-            // Also register commands globally (takes up to 1 hour to appear everywhere)
             try {
                 const globalData = await rest.put(
                     Routes.applicationCommands(this.client.user.id),
@@ -99,7 +97,6 @@ class ShopBot {
         this.client.once('ready', async () => {
             console.log(`${this.client.user.tag} is online!`);
             
-            // Set bot status
             this.client.user.setStatus('online');
             this.client.user.setActivity('Managing the shop', { type: 3 });
             
@@ -136,10 +133,7 @@ class ShopBot {
         this.client.on('messageCreate', async (message) => {
             if (message.author.bot) return;
             
-            // Track user activity
             await this.trackUserActivity(message);
-            
-            // Handle persistent messages
             await this.handlePersistentMessage(message);
         });
 
@@ -203,18 +197,43 @@ class ShopBot {
             // Auto-assign role
             await this.assignAutoRole(member);
             
-            // Get welcome message from database
-            const welcomeMessage = await this.database.getWelcomeMessage();
+            // Check if using embed or text welcome
+            const useEmbed = (await this.database.getConfig('welcome_use_embed')) === 'true';
             
-            // Send DM
-            const embed = new EmbedBuilder()
-                .setTitle('Welcome to the Server!')
-                .setDescription(welcomeMessage || 'Welcome! Thanks for joining our server.')
-                .setColor('#00FF00')
-                .setThumbnail(member.user.displayAvatarURL());
+            if (useEmbed) {
+                // Send embed welcome message
+                const title = await this.database.getConfig('welcome_embed_title') || 'Welcome to the Server!';
+                const description = await this.database.getConfig('welcome_embed_description') || 'Welcome!';
+                const color = await this.database.getConfig('welcome_embed_color') || '#00FF00';
+                const thumbnail = await this.database.getConfig('welcome_embed_thumbnail');
+                const image = await this.database.getConfig('welcome_embed_image');
+                const footer = await this.database.getConfig('welcome_embed_footer');
+                
+                const embed = new EmbedBuilder()
+                    .setTitle(title)
+                    .setDescription(description)
+                    .setColor(color)
+                    .setThumbnail(member.user.displayAvatarURL());
+                
+                // Override thumbnail if custom one is set
+                if (thumbnail) embed.setThumbnail(thumbnail);
+                if (image) embed.setImage(image);
+                if (footer) embed.setFooter({ text: footer });
+                
+                await member.send({ embeds: [embed] });
+            } else {
+                // Send text welcome message (legacy)
+                const welcomeMessage = await this.database.getWelcomeMessage();
+                const embed = new EmbedBuilder()
+                    .setTitle('Welcome to the Server!')
+                    .setDescription(welcomeMessage || 'Welcome! Thanks for joining our server.')
+                    .setColor('#00FF00')
+                    .setThumbnail(member.user.displayAvatarURL());
 
-            await member.send({ embeds: [embed] });
-            console.log(`Sent welcome DM to ${member.user.tag}`);
+                await member.send({ embeds: [embed] });
+            }
+            
+            console.log(`Sent welcome message to ${member.user.tag}`);
             
         } catch (error) {
             console.error('Error handling member join:', error);
@@ -322,10 +341,8 @@ class ShopBot {
 
     async trackUserActivity(message) {
         try {
-            // Ensure user exists before logging activity
             await this.database.addUser(message.author.id, message.author.username, message.author.discriminator);
             
-            // Only log if it's a command (for slash commands, this won't trigger much)
             if (message.content.startsWith('!') || message.content.startsWith('/')) {
                 await this.database.logMessage(
                     message.id,
@@ -335,7 +352,6 @@ class ShopBot {
                     message.content.startsWith('!') ? message.content.split(' ')[0] : null
                 );
             } else {
-                // Just update last activity without logging message content
                 await this.database.updateLastActivity(message.author.id);
             }
         } catch (error) {
@@ -348,7 +364,6 @@ class ShopBot {
             const channelConfig = await this.database.getPersistentChannelConfig(message.channel.id);
             if (!channelConfig) return;
 
-            // Delete the bot's previous message
             if (this.persistentMessages.has(message.channel.id)) {
                 const oldMessage = this.persistentMessages.get(message.channel.id);
                 try {
@@ -358,7 +373,6 @@ class ShopBot {
                 }
             }
 
-            // Send new persistent message
             const embed = new EmbedBuilder()
                 .setDescription(channelConfig.message)
                 .setColor('#0099FF');
@@ -374,11 +388,9 @@ class ShopBot {
     async handleRoleSelection(interaction) {
         try {
             if (interaction.customId.startsWith('role_setup_')) {
-                // Handle custom role setup selections
                 const setupId = interaction.customId.split('_')[2];
                 const selectedValues = interaction.values; // Array of selected option IDs
                 
-                // Get the role setup options
                 const options = await this.database.getRoleSetupOptions(setupId);
                 
                 if (options.length === 0) {
@@ -460,7 +472,7 @@ class ShopBot {
                 if (!role) {
                     return await interaction.reply({ content: 'Role not found!', ephemeral: true });
                 }
-    
+
                 if (member.roles.cache.has(role.id)) {
                     await member.roles.remove(role);
                     await interaction.reply({ content: `Removed role: ${role.name}`, ephemeral: true });
@@ -513,18 +525,9 @@ class ShopBot {
 
             await this.database.updateTransactionStatus(parseInt(transactionId), newStatus);
 
-            // Update the original message
             const updatedEmbed = new EmbedBuilder()
                 .setTitle('🛒 Transaction Updated')
                 .setDescription(`Transaction ID: ${transactionId}`)
-                .addFields(
-                    { name: 'Buyer', value: `<@${transaction.user_id}>`, inline: true },
-                    { name: 'Item', value: transaction.item_name, inline: true },
-                    { name: 'Price', value: `${parseFloat(transaction.total_amount).toFixed(2)}`, inline: true },
-                    { name: 'Status', value: `${statusEmoji} ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`, inline: true },
-                    { name: 'Updated By', value: `<@${interaction.user.id}>`, inline: true },
-                    { name: 'Updated At', value: new Date().toLocaleString(), inline: true }
-                )
                 .setColor(statusColor)
                 .setFooter({ text: `Transaction ${newStatus} by ${interaction.user.username}` });
 
@@ -574,20 +577,17 @@ class ShopBot {
                     return;
                 }
                 
-                // Get backup data
                 const backupData = await this.database.getBackupData();
                 backupData.timestamp = new Date().toISOString();
                 backupData.triggered_by = 'Automated Daily Backup';
                 backupData.type = 'automatic';
                 
-                // Create backup file
                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
                 const backupFileName = `daily_backup_${timestamp}.json`;
                 const backupJson = JSON.stringify(backupData, null, 2);
                 
                 console.log('=== DAILY BACKUP COMPLETED SUCCESSFULLY ===');
                 
-                // Send success notification with file attachment
                 try {
                     const backupChannelId = process.env.BACKUP_CHANNEL_ID;
                     if (backupChannelId) {
@@ -595,10 +595,8 @@ class ShopBot {
                         if (channel) {
                             const stats = await this.database.getDatabaseStats();
                             
-                            // Create temporary file
                             const tempDir = './temp_backups';
                             
-                            // Ensure temp directory exists
                             if (!fs.existsSync(tempDir)) {
                                 fs.mkdirSync(tempDir, { recursive: true });
                             }
@@ -606,11 +604,9 @@ class ShopBot {
                             const filePath = path.join(tempDir, backupFileName);
                             fs.writeFileSync(filePath, backupJson);
                             
-                            // Calculate file size
                             const fileStat = fs.statSync(filePath);
                             const fileSizeMB = (fileStat.size / (1024 * 1024)).toFixed(2);
                             
-                            // Send message with file attachment
                             await channel.send({
                                 content: `✅ **Daily backup completed successfully**\n` +
                                         `Time: ${new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' })}\n` +
@@ -622,7 +618,6 @@ class ShopBot {
                                 }]
                             });
                             
-                            // Clean up temporary file after sending
                             fs.unlinkSync(filePath);
                             
                             console.log(`Backup file ${backupFileName} sent to Discord and cleaned up`);
@@ -639,7 +634,6 @@ class ShopBot {
             } catch (error) {
                 console.error('=== DAILY BACKUP FAILED ===', error);
                 
-                // Send failure notification
                 try {
                     const backupChannelId = process.env.BACKUP_CHANNEL_ID;
                     if (backupChannelId) {
