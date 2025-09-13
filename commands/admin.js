@@ -1447,12 +1447,15 @@ module.exports = {
     // ==================== SCAMMER MANAGEMENT METHODS ====================
 
     async flagScammer(interaction, database) {
-        const user = interaction.options.getUser('user');
-        const reason = interaction.options.getString('reason') || 'No reason provided';
-        
         try {
-            await database.flagUserAsScammer(user.id, reason);
-            const embed = new EmbedBuilder()
+            const user = interaction.options.getUser('user');
+            const reason = interaction.options.getString('reason') || 'No reason provided';
+            
+            // Flag the user and get their info
+            const flaggedUser = await database.flagUserAsScammer(user.id, reason);
+            
+            // Create confirmation embed
+            const confirmEmbed = new EmbedBuilder()
                 .setTitle('🚨 User Flagged as Scammer')
                 .addFields(
                     { name: 'User', value: `<@${user.id}>`, inline: true },
@@ -1461,10 +1464,65 @@ module.exports = {
                 )
                 .setColor('#FF0000');
             
-            await interaction.reply({ embeds: [embed] });
+            // Send confirmation to admin
+            await interaction.reply({ embeds: [confirmEmbed] });
+            
+            // Send alert to scammer alert channel
+            await this.sendScammerAlert(interaction, user, reason, flaggedUser?.username || user.username);
+            
         } catch (error) {
             console.error('Error flagging scammer:', error);
-            await interaction.reply('❌ Error flagging user as scammer.');
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({ 
+                    content: '❌ Error flagging user as scammer.', 
+                    ephemeral: true 
+                });
+            }
+        }
+    },
+
+    async sendScammerAlert(interaction, user, reason, username) {
+        try {
+            const scammerChannelId = process.env.SCAMMER_ALERT_CHANNEL_ID;
+            if (!scammerChannelId) {
+                console.log('No scammer alert channel configured (SCAMMER_ALERT_CHANNEL_ID not set)');
+                return;
+            }
+            
+            const alertChannel = interaction.client.channels.cache.get(scammerChannelId);
+            if (!alertChannel) {
+                console.log('Scammer alert channel not found');
+                return;
+            }
+            
+            // Create the blacklist alert embed
+            const alertEmbed = new EmbedBuilder()
+                .setTitle('⚠️ SCAMMER ALERT ⚠️')
+                .setDescription(`**${username} has been Blacklisted**`)
+                .addFields(
+                    { name: '👤 User', value: `<@${user.id}> (${user.id})`, inline: false },
+                    { name: '📋 Reason', value: reason, inline: false },
+                    { name: '⚠️ Warning', value: 'Do not trade with this user. They have been flagged as a scammer.', inline: false },
+                    { name: '🛡️ Stay Safe', value: 'Always use official trading methods and verify users before trading.', inline: false }
+                )
+                .setColor('#FF0000')
+                .setThumbnail(user.displayAvatarURL())
+                .setFooter({ 
+                    text: `Flagged by ${interaction.user.username} • ${new Date().toLocaleString()}`,
+                    iconURL: interaction.user.displayAvatarURL()
+                })
+                .setTimestamp();
+            
+            // Send the alert
+            await alertChannel.send({ 
+                content: '@here', // Ping here to alert people
+                embeds: [alertEmbed] 
+            });
+            
+            console.log(`Scammer alert sent for ${username} (${user.id})`);
+            
+        } catch (error) {
+            console.error('Error sending scammer alert:', error);
         }
     },
 
