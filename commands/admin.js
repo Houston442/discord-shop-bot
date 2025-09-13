@@ -1,7 +1,5 @@
-// commands/admin.js - Updated with proper setuproles slash commands
+// commands/admin.js - Complete Clean Version with All Features
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
-const fs = require('fs');
-const path = require('path');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -107,7 +105,7 @@ module.exports = {
                                 .setRequired(false))
                         .addStringOption(option =>
                             option.setName('description')
-                                .setDescription('Embed description')
+                                .setDescription('Embed description (use \\n for line breaks)')
                                 .setRequired(false))
                         .addStringOption(option =>
                             option.setName('color')
@@ -159,7 +157,7 @@ module.exports = {
                                 .setRequired(true))
                         .addIntegerOption(option =>
                             option.setName('option_number')
-                                .setDescription('Option number to remove (use list command to see numbers)')
+                                .setDescription('Option number to remove (use view command to see numbers)')
                                 .setRequired(true)))
                 .addSubcommand(subcommand =>
                     subcommand
@@ -181,6 +179,55 @@ module.exports = {
                             option.setName('setup_id')
                                 .setDescription('Setup ID to view')
                                 .setRequired(true))))
+        // Welcome Message Management Commands
+        .addSubcommandGroup(group =>
+            group
+                .setName('welcome')
+                .setDescription('Configure welcome message system')
+                .addSubcommand(subcommand =>
+                    subcommand
+                        .setName('configure')
+                        .setDescription('Configure welcome embed appearance')
+                        .addStringOption(option =>
+                            option.setName('title')
+                                .setDescription('Welcome embed title')
+                                .setRequired(false))
+                        .addStringOption(option =>
+                            option.setName('description')
+                                .setDescription('Welcome message description (use \\n for line breaks)')
+                                .setRequired(false))
+                        .addStringOption(option =>
+                            option.setName('color')
+                                .setDescription('Embed color (hex format like #FF0000)')
+                                .setRequired(false))
+                        .addStringOption(option =>
+                            option.setName('thumbnail')
+                                .setDescription('Thumbnail image URL')
+                                .setRequired(false))
+                        .addStringOption(option =>
+                            option.setName('image')
+                                .setDescription('Main image URL')
+                                .setRequired(false))
+                        .addStringOption(option =>
+                            option.setName('footer')
+                                .setDescription('Footer text')
+                                .setRequired(false)))
+                .addSubcommand(subcommand =>
+                    subcommand
+                        .setName('toggle')
+                        .setDescription('Toggle between embed and text welcome messages')
+                        .addBooleanOption(option =>
+                            option.setName('use_embed')
+                                .setDescription('True for embed, false for plain text')
+                                .setRequired(true)))
+                .addSubcommand(subcommand =>
+                    subcommand
+                        .setName('preview')
+                        .setDescription('Preview the current welcome message'))
+                .addSubcommand(subcommand =>
+                    subcommand
+                        .setName('test')
+                        .setDescription('Send yourself a test welcome message')))
         // Scammer Management Commands
         .addSubcommand(subcommand =>
             subcommand
@@ -206,11 +253,11 @@ module.exports = {
             subcommand
                 .setName('scammerlist')
                 .setDescription('Display all flagged scammers with notes'))
-        // Bot Configuration Commands
+        // Legacy Bot Configuration Commands
         .addSubcommand(subcommand =>
             subcommand
                 .setName('setwelcome')
-                .setDescription('Set welcome DM for new members')
+                .setDescription('Set plain text welcome message (legacy)')
                 .addStringOption(option =>
                     option.setName('message')
                         .setDescription('Welcome message to send to new members')
@@ -280,6 +327,25 @@ module.exports = {
                     break;
                 case 'view':
                     await this.setuprolesView(interaction, database);
+                    break;
+            }
+            return;
+        }
+        
+        // Handle welcome subcommand group
+        if (subcommandGroup === 'welcome') {
+            switch (subcommand) {
+                case 'configure':
+                    await this.welcomeConfigure(interaction, database);
+                    break;
+                case 'toggle':
+                    await this.welcomeToggle(interaction, database);
+                    break;
+                case 'preview':
+                    await this.welcomePreview(interaction, database);
+                    break;
+                case 'test':
+                    await this.welcomeTest(interaction, database);
                     break;
             }
             return;
@@ -362,22 +428,17 @@ module.exports = {
         try {
             const setupName = interaction.options.getString('name');
             
-            // Check if setup name already exists
             const existingSetups = await database.getAllRoleSetups();
             if (existingSetups.some(setup => setup.setup_name.toLowerCase() === setupName.toLowerCase())) {
                 return await interaction.reply('❌ A role setup with that name already exists. Please choose a different name.');
             }
             
-            // Create initial setup in database
             const setupId = await database.createRoleSetup(
                 setupName,
                 interaction.user.id,
                 'Role Selection',
                 'Select your roles from the dropdown below!',
-                null, // thumbnail
-                null, // image
-                '#0099FF', // color
-                null // footer
+                null, null, '#0099FF', null
             );
             
             const embed = new EmbedBuilder()
@@ -388,17 +449,14 @@ module.exports = {
                       `🔧 Configure appearance: \`/admin setuproles configure ${setupId}\`\n` +
                       `🎭 Add role options: \`/admin setuproles addrole ${setupId}\`\n` +
                       `👀 Preview setup: \`/roles preview ${setupId}\`\n` +
-                      `🚀 Deploy when ready: \`/roles deploy ${setupId}\``, inline: false }
-                )
-                .addFields(
+                      `🚀 Deploy when ready: \`/roles deploy ${setupId}\``, inline: false },
                     { name: 'Default Settings', value: 
                       `**Title:** Role Selection\n` +
                       `**Description:** Select your roles from the dropdown below!\n` +
                       `**Color:** #0099FF\n` +
                       `**Role Options:** 0 (none added yet)`, inline: false }
                 )
-                .setColor('#00FF00')
-                .setTimestamp();
+                .setColor('#00FF00');
             
             await interaction.reply({ embeds: [embed] });
             
@@ -418,23 +476,19 @@ module.exports = {
             const image = interaction.options.getString('image');
             const footer = interaction.options.getString('footer');
             
-            // Convert \n to actual line breaks for description
             if (description) {
                 description = description.replace(/\\n/g, '\n');
             }
             
-            // Get the role setup
             const setup = await database.getRoleSetup(setupId);
             if (!setup) {
                 return await interaction.reply('❌ Role setup not found.');
             }
             
-            // Check permissions
             if (setup.created_by !== interaction.user.id && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
                 return await interaction.reply('❌ You can only configure role setups that you created.');
             }
             
-            // Update the setup with provided values
             const updateQuery = `
                 UPDATE role_setups SET 
                     embed_title = COALESCE($2, embed_title),
@@ -449,7 +503,6 @@ module.exports = {
             
             await database.pool.query(updateQuery, [setupId, title, description, color, thumbnail, image, footer]);
             
-            // Get updated setup
             const updatedSetup = await database.getRoleSetup(setupId);
             
             const changesText = [];
@@ -475,7 +528,6 @@ module.exports = {
                 )
                 .setColor(updatedSetup.embed_color || '#0099FF');
             
-            // Show a preview of the actual description if it was updated
             if (description) {
                 embed.addFields({
                     name: 'Description Preview',
@@ -502,49 +554,30 @@ module.exports = {
             const description = interaction.options.getString('description') || `Toggle the ${role.name} role`;
             const emoji = interaction.options.getString('emoji') || null;
             
-            // Get the role setup
             const setup = await database.getRoleSetup(setupId);
             if (!setup) {
                 return await interaction.reply('❌ Role setup not found.');
             }
             
-            // Check permissions
             if (setup.created_by !== interaction.user.id && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
                 return await interaction.reply('❌ You can only modify role setups that you created.');
             }
             
-            // Check if role already exists in this setup
             const existingOptions = await database.getRoleSetupOptions(setupId);
             if (existingOptions.some(option => option.discord_role_id === role.id)) {
                 return await interaction.reply('❌ This role is already added to this setup.');
             }
             
-            // Check Discord's limit of 25 options per select menu
             if (existingOptions.length >= 25) {
                 return await interaction.reply('❌ Cannot add more than 25 role options per setup (Discord limit).');
             }
             
-            // Add the role to database first to sync it
             await database.addServerRole(
-                role.id,
-                role.name,
-                role.color,
-                role.position,
-                role.permissions.bitfield.toString(),
-                role.hoist,
-                role.mentionable,
-                role.managed
+                role.id, role.name, role.color, role.position,
+                role.permissions.bitfield.toString(), role.hoist, role.mentionable, role.managed
             );
             
-            // Add the role option
-            await database.addRoleSetupOption(
-                setupId,
-                label,
-                description,
-                emoji,
-                role.id,
-                existingOptions.length + 1 // order
-            );
+            await database.addRoleSetupOption(setupId, label, description, emoji, role.id, existingOptions.length + 1);
             
             const embed = new EmbedBuilder()
                 .setTitle('✅ Role Option Added')
@@ -559,8 +592,7 @@ module.exports = {
                       `**Total Options:** ${existingOptions.length + 1}/25\n` +
                       `**Ready to Deploy:** ${existingOptions.length + 1 > 0 ? 'Yes' : 'No'}`, inline: false }
                 )
-                .setColor(role.color || '#0099FF')
-                .setTimestamp();
+                .setColor(role.color || '#0099FF');
             
             await interaction.reply({ embeds: [embed] });
             
@@ -575,39 +607,27 @@ module.exports = {
             const setupId = interaction.options.getInteger('setup_id');
             const optionNumber = interaction.options.getInteger('option_number');
             
-            // Get the role setup
             const setup = await database.getRoleSetup(setupId);
             if (!setup) {
                 return await interaction.reply('❌ Role setup not found.');
             }
             
-            // Check permissions
             if (setup.created_by !== interaction.user.id && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
                 return await interaction.reply('❌ You can only modify role setups that you created.');
             }
             
-            // Get existing options
             const existingOptions = await database.getRoleSetupOptions(setupId);
             
             if (optionNumber < 1 || optionNumber > existingOptions.length) {
                 return await interaction.reply(`❌ Invalid option number. Use \`/admin setuproles view ${setupId}\` to see valid option numbers (1-${existingOptions.length}).`);
             }
             
-            // Get the option to remove
             const optionToRemove = existingOptions[optionNumber - 1];
             
-            // Remove the option
-            await database.pool.query(
-                'DELETE FROM role_setup_options WHERE option_id = $1',
-                [optionToRemove.option_id]
-            );
+            await database.pool.query('DELETE FROM role_setup_options WHERE option_id = $1', [optionToRemove.option_id]);
             
-            // Reorder remaining options
             for (let i = optionNumber; i < existingOptions.length; i++) {
-                await database.pool.query(
-                    'UPDATE role_setup_options SET option_order = $1 WHERE option_id = $2',
-                    [i, existingOptions[i].option_id]
-                );
+                await database.pool.query('UPDATE role_setup_options SET option_order = $1 WHERE option_id = $2', [i, existingOptions[i].option_id]);
             }
             
             const embed = new EmbedBuilder()
@@ -622,8 +642,7 @@ module.exports = {
                       `**Total Options:** ${existingOptions.length - 1}/25\n` +
                       `**Ready to Deploy:** ${existingOptions.length - 1 > 0 ? 'Yes' : 'No'}`, inline: false }
                 )
-                .setColor('#FF9900')
-                .setTimestamp();
+                .setColor('#FF9900');
             
             await interaction.reply({ embeds: [embed] });
             
@@ -662,8 +681,7 @@ module.exports = {
                       `\`/roles deploy <id>\` - Deploy to channel`, inline: false }
                 )
                 .setColor('#0099FF')
-                .setFooter({ text: `${setups.length} total setups` })
-                .setTimestamp();
+                .setFooter({ text: `${setups.length} total setups` });
                 
             await interaction.reply({ embeds: [embed] });
             
@@ -682,12 +700,10 @@ module.exports = {
                 return await interaction.reply('❌ Role setup not found.');
             }
             
-            // Check permissions
             if (setup.created_by !== interaction.user.id && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
                 return await interaction.reply('❌ You can only delete role setups that you created.');
             }
             
-            // If deployed, try to delete the message first
             if (setup.channel_id && setup.message_id) {
                 try {
                     const channel = interaction.guild.channels.cache.get(setup.channel_id);
@@ -718,13 +734,11 @@ module.exports = {
         try {
             const setupId = interaction.options.getInteger('setup_id');
             
-            // Get the role setup
             const setup = await database.getRoleSetup(setupId);
             if (!setup) {
                 return await interaction.reply('❌ Role setup not found.');
             }
             
-            // Get the role options
             const options = await database.getRoleSetupOptions(setupId);
             
             const embed = new EmbedBuilder()
@@ -739,8 +753,7 @@ module.exports = {
                       `**Image:** ${setup.embed_image_url ? 'Set' : 'None'}\n` +
                       `**Footer:** ${setup.embed_footer_text || 'None'}`, inline: false }
                 )
-                .setColor(setup.embed_color || '#0099FF')
-                .setTimestamp();
+                .setColor(setup.embed_color || '#0099FF');
             
             if (options.length > 0) {
                 const roleList = options.map((option, index) => 
@@ -769,6 +782,179 @@ module.exports = {
         }
     },
 
+    // ==================== WELCOME MESSAGE MANAGEMENT METHODS ====================
+
+    async welcomeConfigure(interaction, database) {
+        try {
+            const title = interaction.options.getString('title');
+            let description = interaction.options.getString('description');
+            const color = interaction.options.getString('color');
+            const thumbnail = interaction.options.getString('thumbnail');
+            const image = interaction.options.getString('image');
+            const footer = interaction.options.getString('footer');
+            
+            if (description) {
+                description = description.replace(/\\n/g, '\n');
+            }
+            
+            const changesText = [];
+            
+            if (title) {
+                await database.setConfig('welcome_embed_title', title);
+                changesText.push(`**Title:** ${title}`);
+            }
+            if (description) {
+                await database.setConfig('welcome_embed_description', description);
+                changesText.push(`**Description:** Updated (${description.split('\n').length} lines)`);
+            }
+            if (color) {
+                await database.setConfig('welcome_embed_color', color);
+                changesText.push(`**Color:** ${color}`);
+            }
+            if (thumbnail) {
+                await database.setConfig('welcome_embed_thumbnail', thumbnail);
+                changesText.push(`**Thumbnail:** Set`);
+            }
+            if (image) {
+                await database.setConfig('welcome_embed_image', image);
+                changesText.push(`**Image:** Set`);
+            }
+            if (footer) {
+                await database.setConfig('welcome_embed_footer', footer);
+                changesText.push(`**Footer:** ${footer}`);
+            }
+            
+            const currentTitle = await database.getConfig('welcome_embed_title') || 'Welcome to the Server!';
+            const currentDesc = await database.getConfig('welcome_embed_description') || 'Welcome!';
+            const currentColor = await database.getConfig('welcome_embed_color') || '#00FF00';
+            const currentThumbnail = await database.getConfig('welcome_embed_thumbnail');
+            const currentImage = await database.getConfig('welcome_embed_image');
+            const currentFooter = await database.getConfig('welcome_embed_footer');
+            
+            const embed = new EmbedBuilder()
+                .setTitle('✅ Welcome Message Configuration Updated')
+                .addFields(
+                    { name: 'Changes Made', value: changesText.length > 0 ? changesText.join('\n') : 'No changes specified', inline: false },
+                    { name: 'Current Configuration', value: 
+                      `**Title:** ${currentTitle}\n` +
+                      `**Description:** ${currentDesc.length > 100 ? currentDesc.substring(0, 100) + '...' : currentDesc}\n` +
+                      `**Color:** ${currentColor}\n` +
+                      `**Thumbnail:** ${currentThumbnail ? 'Set' : 'None'}\n` +
+                      `**Image:** ${currentImage ? 'Set' : 'None'}\n` +
+                      `**Footer:** ${currentFooter || 'None'}`, inline: false }
+                )
+                .setColor(currentColor);
+            
+            await interaction.reply({ embeds: [embed] });
+            
+        } catch (error) {
+            console.error('Error configuring welcome message:', error);
+            await interaction.reply('❌ Error configuring welcome message. Check that color is in hex format (#FF0000) and URLs are valid.');
+        }
+    },
+
+    async welcomeToggle(interaction, database) {
+        try {
+            const useEmbed = interaction.options.getBoolean('use_embed');
+            
+            await database.setConfig('welcome_use_embed', useEmbed.toString());
+            
+            const statusText = useEmbed ? 'Rich Embed Messages' : 'Plain Text Messages';
+            const embed = new EmbedBuilder()
+                .setTitle('✅ Welcome Message Format Updated')
+                .setDescription(`Welcome messages will now be sent as: **${statusText}**`)
+                .addFields({
+                    name: 'Commands Available',
+                    value: useEmbed ? 
+                        '`/admin welcome configure` - Customize embed appearance\n`/admin welcome preview` - Preview current embed\n`/admin welcome test` - Test the welcome message' :
+                        '`/admin setwelcome` - Set plain text message\n`/admin welcome toggle` - Switch back to embeds',
+                    inline: false
+                })
+                .setColor(useEmbed ? '#00FF00' : '#FFA500');
+            
+            await interaction.reply({ embeds: [embed] });
+            
+        } catch (error) {
+            console.error('Error toggling welcome format:', error);
+            await interaction.reply('❌ Error updating welcome message format.');
+        }
+    },
+
+    async welcomePreview(interaction, database) {
+        try {
+            const useEmbed = (await database.getConfig('welcome_use_embed')) === 'true';
+            
+            if (!useEmbed) {
+                const textMessage = await database.getWelcomeMessage();
+                return await interaction.reply({
+                    content: `**Current Welcome Message (Plain Text):**\n\n${textMessage}`,
+                    ephemeral: true
+                });
+            }
+            
+            const title = await database.getConfig('welcome_embed_title') || 'Welcome to the Server!';
+            const description = await database.getConfig('welcome_embed_description') || 'Welcome!';
+            const color = await database.getConfig('welcome_embed_color') || '#00FF00';
+            const thumbnail = await database.getConfig('welcome_embed_thumbnail');
+            const image = await database.getConfig('welcome_embed_image');
+            const footer = await database.getConfig('welcome_embed_footer');
+            
+            const embed = new EmbedBuilder()
+                .setTitle(title)
+                .setDescription(description)
+                .setColor(color);
+            
+            if (thumbnail) embed.setThumbnail(thumbnail);
+            if (image) embed.setImage(image);
+            if (footer) embed.setFooter({ text: footer });
+            
+            await interaction.reply({
+                content: '**Preview of Current Welcome Message:**',
+                embeds: [embed],
+                ephemeral: true
+            });
+            
+        } catch (error) {
+            console.error('Error previewing welcome message:', error);
+            await interaction.reply('❌ Error generating welcome message preview.');
+        }
+    },
+
+    async welcomeTest(interaction, database) {
+        try {
+            const useEmbed = (await database.getConfig('welcome_use_embed')) === 'true';
+            
+            if (!useEmbed) {
+                const textMessage = await database.getWelcomeMessage();
+                await interaction.user.send(`**Test Welcome Message:**\n\n${textMessage}`);
+            } else {
+                const title = await database.getConfig('welcome_embed_title') || 'Welcome to the Server!';
+                const description = await database.getConfig('welcome_embed_description') || 'Welcome!';
+                const color = await database.getConfig('welcome_embed_color') || '#00FF00';
+                const thumbnail = await database.getConfig('welcome_embed_thumbnail');
+                const image = await database.getConfig('welcome_embed_image');
+                const footer = await database.getConfig('welcome_embed_footer');
+                
+                const embed = new EmbedBuilder()
+                    .setTitle(title)
+                    .setDescription(description)
+                    .setColor(color);
+                
+                if (thumbnail) embed.setThumbnail(thumbnail);
+                if (image) embed.setImage(image);
+                if (footer) embed.setFooter({ text: footer });
+                
+                await interaction.user.send({ embeds: [embed] });
+            }
+            
+            await interaction.reply({ content: '✅ Test welcome message sent to your DMs!', ephemeral: true });
+            
+        } catch (error) {
+            console.error('Error sending test welcome:', error);
+            await interaction.reply('❌ Error sending test message. Make sure your DMs are open.');
+        }
+    },
+
     // ==================== TRANSACTION METHODS ====================
 
     async createTransaction(interaction, database) {
@@ -789,12 +975,7 @@ module.exports = {
             }
             
             const transactionId = await database.addTransaction(
-                user.id,
-                itemName,
-                1,
-                totalPrice,
-                totalPrice,
-                interaction.user.id
+                user.id, itemName, 1, totalPrice, totalPrice, interaction.user.id
             );
             
             const completeButton = new ButtonBuilder()
@@ -809,8 +990,7 @@ module.exports = {
                 .setStyle(ButtonStyle.Danger)
                 .setEmoji('❌');
 
-            const row = new ActionRowBuilder()
-                .addComponents(completeButton, cancelButton);
+            const row = new ActionRowBuilder().addComponents(completeButton, cancelButton);
             
             const embed = new EmbedBuilder()
                 .setTitle('🛒 New Transaction Created')
@@ -823,13 +1003,9 @@ module.exports = {
                     { name: 'Created By', value: `<@${interaction.user.id}>`, inline: true }
                 )
                 .setColor('#FFA500')
-                .setFooter({ text: 'Use the buttons below to complete or cancel this transaction' })
-                .setTimestamp();
+                .setFooter({ text: 'Use the buttons below to complete or cancel this transaction' });
                 
-            await interaction.reply({ 
-                embeds: [embed], 
-                components: [row] 
-            });
+            await interaction.reply({ embeds: [embed], components: [row] });
             
         } catch (error) {
             console.error('Error in createTransaction:', error);
@@ -843,8 +1019,7 @@ module.exports = {
     async showHistory(interaction, database) {
         try {
             const targetUser = interaction.options.getUser('user');
-            let transactions;
-            let title;
+            let transactions, title;
             
             if (targetUser) {
                 transactions = await database.getUserTransactions(targetUser.id);
@@ -873,8 +1048,7 @@ module.exports = {
                            `**Date:** ${new Date(t.timestamp).toLocaleDateString()}`;
                 }).join('\n\n'))
                 .setColor('#0099FF')
-                .setFooter({ text: `Showing ${Math.min(transactions.length, 15)} transactions` })
-                .setTimestamp();
+                .setFooter({ text: `Showing ${Math.min(transactions.length, 15)} transactions` });
                 
             if (transactions.length > 15) {
                 embed.addFields({ 
@@ -913,8 +1087,7 @@ module.exports = {
                     { name: 'Date Created', value: new Date(transaction.timestamp).toLocaleDateString(), inline: true },
                     { name: 'Time Created', value: new Date(transaction.timestamp).toLocaleTimeString(), inline: true }
                 )
-                .setColor(this.getStatusColor(transaction.status))
-                .setTimestamp();
+                .setColor(this.getStatusColor(transaction.status));
                 
             await interaction.reply({ embeds: [embed] });
             
@@ -941,8 +1114,7 @@ module.exports = {
                 .setTitle('🏆 Top Sellers Leaderboard')
                 .setDescription(leaderboardText)
                 .setColor('#FFD700')
-                .setFooter({ text: `Showing top ${topSellers.length} sellers` })
-                .setTimestamp();
+                .setFooter({ text: `Showing top ${topSellers.length} sellers` });
                 
             await interaction.reply({ embeds: [embed] });
             
@@ -961,11 +1133,7 @@ module.exports = {
             const guild = interaction.guild;
             const members = await guild.members.fetch();
             
-            let addedCount = 0;
-            let updatedCount = 0;
-            let skippedCount = 0;
-            let errorCount = 0;
-
+            let addedCount = 0, updatedCount = 0, skippedCount = 0, errorCount = 0;
             const totalMembers = members.size;
             const memberArray = Array.from(members.values());
             const batchSize = 50;
@@ -1017,8 +1185,7 @@ module.exports = {
                     { name: 'Bots Skipped', value: skippedCount.toString(), inline: true },
                     { name: 'Errors', value: errorCount.toString(), inline: true }
                 )
-                .setColor('#00FF00')
-                .setTimestamp();
+                .setColor('#00FF00');
 
             await interaction.editReply({ content: '', embeds: [embed] });
 
@@ -1059,8 +1226,7 @@ module.exports = {
                     { name: 'Sales Created', value: sellerStats.total_sales?.toString() || '0', inline: true },
                     { name: 'Revenue Generated', value: `${parseFloat(sellerStats.total_earned || 0).toFixed(2)}`, inline: true }
                 )
-                .setColor(userInfo.is_scammer ? '#FF0000' : '#00FF00')
-                .setTimestamp();
+                .setColor(userInfo.is_scammer ? '#FF0000' : '#00FF00');
                 
             if (userInfo.scammer_notes) {
                 embed.addFields({ name: 'Scammer Notes', value: userInfo.scammer_notes, inline: false });
@@ -1094,8 +1260,7 @@ module.exports = {
                     { name: 'Server Roles', value: stats.server_roles_count?.toString() || '0', inline: true },
                     { name: 'Role Setups', value: stats.role_setups_count?.toString() || '0', inline: true }
                 )
-                .setColor('#0099FF')
-                .setTimestamp();
+                .setColor('#0099FF');
 
             await interaction.reply({ embeds: [embed] });
         } catch (error) {
@@ -1113,10 +1278,7 @@ module.exports = {
             const guild = interaction.guild;
             const roles = guild.roles.cache;
             
-            let addedCount = 0;
-            let updatedCount = 0;
-            let errorCount = 0;
-
+            let addedCount = 0, updatedCount = 0, errorCount = 0;
             const totalRoles = roles.size;
             
             for (const [roleId, role] of roles) {
@@ -1125,14 +1287,8 @@ module.exports = {
                     const existingRole = existingRoles.find(r => r.role_id === role.id);
                     
                     await database.addServerRole(
-                        role.id,
-                        role.name,
-                        role.color,
-                        role.position,
-                        role.permissions.bitfield.toString(),
-                        role.hoist,
-                        role.mentionable,
-                        role.managed
+                        role.id, role.name, role.color, role.position,
+                        role.permissions.bitfield.toString(), role.hoist, role.mentionable, role.managed
                     );
                     
                     if (existingRole) {
@@ -1156,8 +1312,7 @@ module.exports = {
                     { name: 'Existing Roles Updated', value: updatedCount.toString(), inline: true },
                     { name: 'Errors', value: errorCount.toString(), inline: true }
                 )
-                .setColor('#00FF00')
-                .setTimestamp();
+                .setColor('#00FF00');
 
             await interaction.editReply({ embeds: [embed] });
 
@@ -1176,23 +1331,6 @@ module.exports = {
         try {
             const roles = await database.getAssignableRoles();
             
-            if (roles.length === 0) {
-                return await interaction.reply('📋 No assignable roles found. Try running /admin syncroles first.');
-            }
-            
-            const roleList = roles.slice(0, 20).map((role, index) => {
-                const colorHex = role.role_color ? `#${role.role_color.toString(16).padStart(6, '0')}` : 'Default';
-                return `**${index + 1}.** ${role.role_name} (ID: ${role.role_id})\n` +
-                       `   Position: ${role.role_position} | Color: ${colorHex}`;
-            }).join('\n\n');
-            
-            const embed = new EmbedBuilder()
-                .setTitle('🎭 Server Roles')
-                .setDescription(roleList)
-                .setColor('#0099FF')
-                .setFooter({ text: `Showing ${Math.min(roles.length, 20)} of ${roles.length} assignable roles` })
-                .setTimestamp();
-                
             if (roles.length > 20) {
                 embed.addFields({ 
                     name: 'Note', 
@@ -1227,8 +1365,7 @@ module.exports = {
                     { name: 'Role ID', value: role.id, inline: true },
                     { name: 'Members with Role', value: role.members.size.toString(), inline: true }
                 )
-                .setColor(role.color || '#0099FF')
-                .setTimestamp();
+                .setColor(role.color || '#0099FF');
             
             await interaction.reply({ embeds: [embed] });
             
@@ -1253,8 +1390,7 @@ module.exports = {
                     { name: 'Reason', value: reason, inline: false },
                     { name: 'Flagged by', value: interaction.user.username, inline: true }
                 )
-                .setColor('#FF0000')
-                .setTimestamp();
+                .setColor('#FF0000');
             
             await interaction.reply({ embeds: [embed] });
         } catch (error) {
@@ -1289,8 +1425,7 @@ module.exports = {
                     `<@${s.discord_id}> **(${s.username})**\n📝 ${s.scammer_notes || 'No notes provided'}`
                 ).join('\n\n'))
                 .setColor('#FF0000')
-                .setFooter({ text: `${scammers.length} flagged scammers` })
-                .setTimestamp();
+                .setFooter({ text: `${scammers.length} flagged scammers` });
                 
             await interaction.reply({ embeds: [embed] });
         } catch (error) {
@@ -1306,13 +1441,13 @@ module.exports = {
         
         try {
             await database.setWelcomeMessage(message);
+            await database.setConfig('welcome_use_embed', 'false');
             
             const embed = new EmbedBuilder()
-                .setTitle('✅ Welcome Message Updated')
+                .setTitle('✅ Welcome Message Updated (Plain Text Mode)')
                 .setDescription('New welcome message:')
                 .addFields({ name: 'Message', value: message })
-                .setColor('#00FF00')
-                .setTimestamp();
+                .setColor('#00FF00');
             
             await interaction.reply({ embeds: [embed] });
         } catch (error) {
@@ -1382,8 +1517,7 @@ module.exports = {
                     { name: 'Sales Revenue', value: `${(stats.total_sales_revenue || 0).toFixed(2)}`, inline: true },
                     { name: 'Pending Transactions', value: `${stats.pending_transactions || 0}`, inline: true }
                 )
-                .setColor('#00FF99')
-                .setTimestamp();
+                .setColor('#00FF99');
 
             await interaction.reply({ embeds: [embed] });
 
@@ -1405,8 +1539,7 @@ module.exports = {
                     { name: 'Status', value: isConnected ? '✅ Connected' : '❌ Failed', inline: true },
                     { name: 'Response Time', value: `${responseTime}ms`, inline: true }
                 )
-                .setColor(isConnected ? '#00FF00' : '#FF0000')
-                .setTimestamp();
+                .setColor(isConnected ? '#00FF00' : '#FF0000');
 
             await interaction.reply({ embeds: [embed] });
 
