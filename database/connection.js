@@ -123,8 +123,16 @@ class Database {
             // Persistent message channels
             `CREATE TABLE IF NOT EXISTS persistent_channels (
                 channel_id VARCHAR(20) PRIMARY KEY,
-                message TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                message_type VARCHAR(10) DEFAULT 'text',
+                message_content TEXT,
+                embed_title TEXT,
+                embed_description TEXT,
+                embed_color VARCHAR(7) DEFAULT '#0099FF',
+                embed_thumbnail_url TEXT,
+                embed_image_url TEXT,
+                embed_footer_text TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`
         ];
 
@@ -838,7 +846,56 @@ class Database {
             throw error;
         }
     }
+    
+    async setPersistentChannelEmbed(channelId, title, description, color, thumbnail, image, footer) {
+        try {
+            await this.pool.query(
+                `INSERT INTO persistent_channels 
+                 (channel_id, message_type, embed_title, embed_description, embed_color, embed_thumbnail_url, embed_image_url, embed_footer_text, updated_at) 
+                 VALUES ($1, 'embed', $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP) 
+                 ON CONFLICT (channel_id) 
+                 DO UPDATE SET 
+                    message_type = 'embed',
+                    embed_title = $2,
+                    embed_description = $3,
+                    embed_color = $4,
+                    embed_thumbnail_url = $5,
+                    embed_image_url = $6,
+                    embed_footer_text = $7,
+                    updated_at = CURRENT_TIMESTAMP`,
+                [channelId, title, description, color, thumbnail, image, footer]
+            );
+        } catch (error) {
+            console.error('Error setting persistent channel embed:', error);
+            throw error;
+        }
+    },
 
+    async setPersistentChannelText(channelId, message) {
+        try {
+            await this.pool.query(
+                `INSERT INTO persistent_channels 
+                 (channel_id, message_type, message_content, updated_at) 
+                 VALUES ($1, 'text', $2, CURRENT_TIMESTAMP) 
+                 ON CONFLICT (channel_id) 
+                 DO UPDATE SET 
+                    message_type = 'text',
+                    message_content = $2,
+                    embed_title = NULL,
+                    embed_description = NULL,
+                    embed_color = '#0099FF',
+                    embed_thumbnail_url = NULL,
+                    embed_image_url = NULL,
+                    embed_footer_text = NULL,
+                    updated_at = CURRENT_TIMESTAMP`,
+                [channelId, message]
+            );
+        } catch (error) {
+            console.error('Error setting persistent channel text:', error);
+            throw error;
+        }
+    },
+    
     // ==================== BACKUP AND UTILITY METHODS ====================
 
     async getBackupData() {
