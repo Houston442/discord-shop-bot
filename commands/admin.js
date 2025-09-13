@@ -412,11 +412,16 @@ module.exports = {
         try {
             const setupId = interaction.options.getInteger('setup_id');
             const title = interaction.options.getString('title');
-            const description = interaction.options.getString('description');
+            let description = interaction.options.getString('description');
             const color = interaction.options.getString('color');
             const thumbnail = interaction.options.getString('thumbnail');
             const image = interaction.options.getString('image');
             const footer = interaction.options.getString('footer');
+            
+            // Convert \n to actual line breaks for description
+            if (description) {
+                description = description.replace(/\\n/g, '\n');
+            }
             
             // Get the role setup
             const setup = await database.getRoleSetup(setupId);
@@ -449,7 +454,7 @@ module.exports = {
             
             const changesText = [];
             if (title) changesText.push(`**Title:** ${title}`);
-            if (description) changesText.push(`**Description:** ${description}`);
+            if (description) changesText.push(`**Description:** Updated (${description.split('\n').length} lines)`);
             if (color) changesText.push(`**Color:** ${color}`);
             if (thumbnail) changesText.push(`**Thumbnail:** ${thumbnail}`);
             if (image) changesText.push(`**Image:** ${image}`);
@@ -462,7 +467,7 @@ module.exports = {
                     { name: 'Changes Made', value: changesText.length > 0 ? changesText.join('\n') : 'No changes specified', inline: false },
                     { name: 'Current Configuration', value: 
                       `**Title:** ${updatedSetup.embed_title || 'Role Selection'}\n` +
-                      `**Description:** ${(updatedSetup.embed_description || 'Select your roles...').substring(0, 100)}${updatedSetup.embed_description?.length > 100 ? '...' : ''}\n` +
+                      `**Description:** ${updatedSetup.embed_description ? (updatedSetup.embed_description.length > 100 ? updatedSetup.embed_description.substring(0, 100) + '...' : updatedSetup.embed_description) : 'Select your roles...'}\n` +
                       `**Color:** ${updatedSetup.embed_color || '#0099FF'}\n` +
                       `**Thumbnail:** ${updatedSetup.embed_thumbnail_url ? 'Set' : 'None'}\n` +
                       `**Image:** ${updatedSetup.embed_image_url ? 'Set' : 'None'}\n` +
@@ -470,6 +475,17 @@ module.exports = {
                 )
                 .setColor(updatedSetup.embed_color || '#0099FF')
                 .setTimestamp();
+            
+            // Show a preview of the actual description if it was updated
+            if (description) {
+                embed.addFields({
+                    name: 'Description Preview',
+                    value: updatedSetup.embed_description.length > 500 ? 
+                           updatedSetup.embed_description.substring(0, 500) + '...' : 
+                           updatedSetup.embed_description,
+                    inline: false
+                });
+            }
             
             await interaction.reply({ embeds: [embed] });
             
