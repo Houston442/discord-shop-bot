@@ -869,7 +869,7 @@ class Database {
             console.error('Error setting persistent channel embed:', error);
             throw error;
         }
-    },
+    }
 
     async setPersistentChannelText(channelId, message) {
         try {
