@@ -1,4 +1,4 @@
-// commands/message.js - Complete Clean Version with Enhanced Embed Features
+// commands/message.js - Clean Version with Hidden Command Usage
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
@@ -125,12 +125,23 @@ module.exports = {
             const content = interaction.options.getString('content');
             const processedMessage = await this.processEmojis(content, interaction.guild);
             
-            await interaction.reply({ content: processedMessage });
+            // Send the actual message to the channel
+            await interaction.channel.send(processedMessage);
+            
+            // Reply with ephemeral confirmation (only user can see)
+            await interaction.reply({ 
+                content: '✅ Message sent successfully!', 
+                ephemeral: true 
+            });
+            
             console.log(`Message sent by ${interaction.user.username}: ${content}`);
             
         } catch (error) {
             console.error('Error sending message:', error);
-            await interaction.reply({ content: '❌ Error sending message. Check emoji names and permissions.', ephemeral: true });
+            await interaction.reply({ 
+                content: '❌ Error sending message. Check emoji names and permissions.', 
+                ephemeral: true 
+            });
         }
     },
 
@@ -147,7 +158,10 @@ module.exports = {
             
         } catch (error) {
             console.error('Error editing message:', error);
-            await interaction.reply({ content: '❌ Error editing message. Check message ID exists and bot has permissions.', ephemeral: true });
+            await interaction.reply({ 
+                content: '❌ Error editing message. Check message ID exists and bot has permissions.', 
+                ephemeral: true 
+            });
         }
     },
 
@@ -196,7 +210,14 @@ module.exports = {
                 embed.setFooter({ text: processedFooter });
             }
 
-            await interaction.reply({ embeds: [embed] });
+            // Send the embed to the channel
+            await interaction.channel.send({ embeds: [embed] });
+            
+            // Reply with ephemeral confirmation (only user can see)
+            await interaction.reply({ 
+                content: '✅ Embed sent successfully!', 
+                ephemeral: true 
+            });
             
         } catch (error) {
             console.error('Error sending embed:', error);
@@ -213,13 +234,22 @@ module.exports = {
             const content = interaction.options.getString('content');
             
             const processedMessage = await this.processEmojis(content, interaction.guild);
+            
+            // Send to the specified channel
             await targetChannel.send(processedMessage);
             
-            await interaction.reply({ content: `✅ Message sent to ${targetChannel}!`, ephemeral: true });
+            // Reply with ephemeral confirmation (only user can see)
+            await interaction.reply({ 
+                content: `✅ Message sent to ${targetChannel}!`, 
+                ephemeral: true 
+            });
             
         } catch (error) {
             console.error('Error sending to channel:', error);
-            await interaction.reply({ content: '❌ Error sending message to channel. Check permissions.', ephemeral: true });
+            await interaction.reply({ 
+                content: '❌ Error sending message to channel. Check permissions.', 
+                ephemeral: true 
+            });
         }
     },
 
@@ -231,11 +261,17 @@ module.exports = {
             const processedMessage = await this.processEmojis(content, interaction.guild);
             await user.send(processedMessage);
             
-            await interaction.reply({ content: `✅ DM sent to ${user.username}!`, ephemeral: true });
+            await interaction.reply({ 
+                content: `✅ DM sent to ${user.username}!`, 
+                ephemeral: true 
+            });
             
         } catch (error) {
             console.error('Error sending DM:', error);
-            await interaction.reply({ content: '❌ Error sending DM. User may have DMs disabled.', ephemeral: true });
+            await interaction.reply({ 
+                content: '❌ Error sending DM. User may have DMs disabled.', 
+                ephemeral: true 
+            });
         }
     },
 
@@ -248,11 +284,21 @@ module.exports = {
             const processedMessage = await this.processEmojis(content, interaction.guild);
             const fullMessage = ping + processedMessage;
             
-            await interaction.reply(fullMessage);
+            // Send the announcement to the channel
+            await interaction.channel.send(fullMessage);
+            
+            // Reply with ephemeral confirmation (only user can see)
+            await interaction.reply({ 
+                content: '✅ Announcement sent successfully!', 
+                ephemeral: true 
+            });
             
         } catch (error) {
             console.error('Error sending announcement:', error);
-            await interaction.reply({ content: '❌ Error sending announcement. Check permissions.', ephemeral: true });
+            await interaction.reply({ 
+                content: '❌ Error sending announcement. Check permissions.', 
+                ephemeral: true 
+            });
         }
     },
 
