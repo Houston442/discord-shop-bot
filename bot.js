@@ -367,6 +367,15 @@ class ShopBot {
             const channelConfig = await this.database.getPersistentChannelConfig(message.channel.id);
             if (!channelConfig) return;
     
+            // Skip if this message IS the persistent message to avoid infinite loops
+            if (this.persistentMessages.has(message.channel.id)) {
+                const existingPersistentMessage = this.persistentMessages.get(message.channel.id);
+                if (message.id === existingPersistentMessage.id) {
+                    return; // Don't trigger on the persistent message itself
+                }
+            }
+    
+            // Delete the old persistent message
             if (this.persistentMessages.has(message.channel.id)) {
                 const oldMessage = this.persistentMessages.get(message.channel.id);
                 try {
