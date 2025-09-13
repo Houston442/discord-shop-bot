@@ -526,8 +526,7 @@ class ShopBot {
                     { name: 'Updated At', value: new Date().toLocaleString(), inline: true }
                 )
                 .setColor(statusColor)
-                .setFooter({ text: `Transaction ${newStatus} by ${interaction.user.username}` })
-                .setTimestamp();
+                .setFooter({ text: `Transaction ${newStatus} by ${interaction.user.username}` });
 
             await interaction.update({ embeds: [updatedEmbed], components: [] });
 
