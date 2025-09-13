@@ -131,12 +131,15 @@ class ShopBot {
 
         // Message create (Activity tracking & Persistent messages)
         this.client.on('messageCreate', async (message) => {
+            // Handle persistent messages for ALL messages (including bot messages)
+            await this.handlePersistentMessage(message);
+            
+            // Only process user messages for activity tracking
             if (message.author.bot) return;
             
             await this.trackUserActivity(message);
-            await this.handlePersistentMessage(message);
         });
-
+    
         // Interaction create (Slash commands, role selection, buttons, etc.)
         this.client.on('interactionCreate', async (interaction) => {
             try {
