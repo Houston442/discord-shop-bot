@@ -854,11 +854,12 @@ class Database {
         try {
             await this.pool.query(
                 `INSERT INTO persistent_channels 
-                 (channel_id, message_type, embed_title, embed_description, embed_color, embed_thumbnail_url, embed_image_url, embed_footer_text, updated_at) 
-                 VALUES ($1, 'embed', $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP) 
+                 (channel_id, message_type, message_content, embed_title, embed_description, embed_color, embed_thumbnail_url, embed_image_url, embed_footer_text, updated_at) 
+                 VALUES ($1, 'embed', '', $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP) 
                  ON CONFLICT (channel_id) 
                  DO UPDATE SET 
                     message_type = 'embed',
+                    message_content = '',
                     embed_title = $2,
                     embed_description = $3,
                     embed_color = $4,
