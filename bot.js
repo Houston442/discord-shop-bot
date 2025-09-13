@@ -363,7 +363,7 @@ class ShopBot {
         try {
             const channelConfig = await this.database.getPersistentChannelConfig(message.channel.id);
             if (!channelConfig) return;
-
+    
             if (this.persistentMessages.has(message.channel.id)) {
                 const oldMessage = this.persistentMessages.get(message.channel.id);
                 try {
@@ -372,19 +372,45 @@ class ShopBot {
                     console.log('Could not delete old persistent message:', error.message);
                 }
             }
-
-            const embed = new EmbedBuilder()
-                .setDescription(channelConfig.message)
-                .setColor('#0099FF');
-
-            const newMessage = await message.channel.send({ embeds: [embed] });
+    
+            let newMessage;
+            
+            if (channelConfig.message_type === 'embed') {
+                // Create embed from stored configuration
+                const embed = new EmbedBuilder()
+                    .setTitle(channelConfig.embed_title || 'Persistent Message')
+                    .setDescription(channelConfig.embed_description || 'Default description')
+                    .setColor(channelConfig.embed_color || '#0099FF');
+                    
+                if (channelConfig.embed_thumbnail_url) {
+                    embed.setThumbnail(channelConfig.embed_thumbnail_url);
+                }
+                
+                if (channelConfig.embed_image_url) {
+                    embed.setImage(channelConfig.embed_image_url);
+                }
+                
+                if (channelConfig.embed_footer_text) {
+                    embed.setFooter({ text: channelConfig.embed_footer_text });
+                }
+                
+                newMessage = await message.channel.send({ embeds: [embed] });
+            } else {
+                // Send text message (legacy)
+                const embed = new EmbedBuilder()
+                    .setDescription(channelConfig.message_content || channelConfig.message)
+                    .setColor('#0099FF');
+                    
+                newMessage = await message.channel.send({ embeds: [embed] });
+            }
+            
             this.persistentMessages.set(message.channel.id, newMessage);
             
         } catch (error) {
             console.error('Error handling persistent message:', error);
         }
     }
-
+    
     async handleRoleSelection(interaction) {
         try {
             if (interaction.customId.startsWith('role_setup_')) {
