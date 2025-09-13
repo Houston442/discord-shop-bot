@@ -1599,9 +1599,62 @@ module.exports = {
             backupData.timestamp = new Date().toISOString();
             backupData.triggered_by = interaction.user.username;
             backupData.type = 'manual';
-
-            await interaction.editReply('✅ Manual backup completed!');
-
+    
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const backupFileName = `manual_backup_${timestamp}.json`;
+            const backupJson = JSON.stringify(backupData, null, 2);
+    
+            // Get stats for the backup
+            const stats = await database.getDatabaseStats();
+            
+            try {
+                const backupChannelId = process.env.BACKUP_CHANNEL_ID;
+                if (backupChannelId) {
+                    const channel = interaction.client.channels.cache.get(backupChannelId);
+                    if (channel) {
+                        const fs = require('fs');
+                        const path = require('path');
+                        
+                        // Create temp directory if it doesn't exist
+                        const tempDir = './temp_backups';
+                        if (!fs.existsSync(tempDir)) {
+                            fs.mkdirSync(tempDir, { recursive: true });
+                        }
+                        
+                        // Write backup file
+                        const filePath = path.join(tempDir, backupFileName);
+                        fs.writeFileSync(filePath, backupJson);
+                        
+                        const fileStat = fs.statSync(filePath);
+                        const fileSizeMB = (fileStat.size / (1024 * 1024)).toFixed(2);
+                        
+                        // Send to backup channel
+                        await channel.send({
+                            content: `📋 **Manual backup requested by ${interaction.user.username}**\n` +
+                                    `Time: ${new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' })}\n` +
+                                    `Users: ${stats.users_count || 0} | Transactions: ${stats.transactions_count || 0} | Revenue: ${(stats.total_revenue || 0).toFixed(2)}\n` +
+                                    `File Size: ${fileSizeMB} MB`,
+                            files: [{
+                                attachment: filePath,
+                                name: backupFileName
+                            }]
+                        });
+                        
+                        // Clean up temp file
+                        fs.unlinkSync(filePath);
+                        
+                        await interaction.editReply('✅ Manual backup completed and sent to backup channel!');
+                    } else {
+                        await interaction.editReply('✅ Manual backup completed, but backup channel not found.');
+                    }
+                } else {
+                    await interaction.editReply('✅ Manual backup completed, but no backup channel configured (BACKUP_CHANNEL_ID not set).');
+                }
+            } catch (fileError) {
+                console.error('Error sending manual backup file:', fileError);
+                await interaction.editReply('✅ Manual backup data created, but failed to send file to backup channel.');
+            }
+    
         } catch (error) {
             console.error('Error creating manual backup:', error);
             await interaction.editReply('❌ Error creating backup.');
