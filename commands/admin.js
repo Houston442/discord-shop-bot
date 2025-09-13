@@ -1575,7 +1575,7 @@ module.exports = {
         } catch (error) {
             console.error('Error sending scammer removal alert:', error);
         }
-    }
+    },
 
     async listScammers(interaction, database) {
         try {
