@@ -386,6 +386,22 @@ module.exports = {
             }
             return;
         }
+
+        // Handle persistent subcommand group
+        if (subcommandGroup === 'persistent') {
+            switch (subcommand) {
+                case 'text':
+                    await this.setPersistentText(interaction, database);
+                    break;
+                case 'embed':
+                    await this.setPersistentEmbed(interaction, database);
+                    break;
+                case 'remove':
+                    await this.removePersistentChannel(interaction, database);
+                    break;
+            }
+            return;
+        }
         
         // Handle regular subcommands
         switch (subcommand) {
