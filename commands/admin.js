@@ -1513,7 +1513,7 @@ module.exports = {
         } catch (error) {
             console.error('Error sending scammer alert:', error);
         }
-    }
+    },
 
     async unflagScammer(interaction, database) {
         try {
