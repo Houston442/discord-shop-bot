@@ -1,4 +1,4 @@
-// commands/message.js - Slash Command Version
+// commands/message.js - Complete Clean Version with Enhanced Embed Features
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
@@ -29,18 +29,30 @@ module.exports = {
         .addSubcommand(subcommand =>
             subcommand
                 .setName('embed')
-                .setDescription('Send an embedded message')
+                .setDescription('Send an embedded message with full customization')
                 .addStringOption(option =>
                     option.setName('title')
                         .setDescription('Embed title')
                         .setRequired(true))
                 .addStringOption(option =>
                     option.setName('description')
-                        .setDescription('Embed description with emoji support')
+                        .setDescription('Embed description (use \\n for line breaks)')
                         .setRequired(true))
                 .addStringOption(option =>
                     option.setName('color')
                         .setDescription('Embed color (hex format like #FF0000)')
+                        .setRequired(false))
+                .addStringOption(option =>
+                    option.setName('thumbnail')
+                        .setDescription('Thumbnail image URL')
+                        .setRequired(false))
+                .addStringOption(option =>
+                    option.setName('image')
+                        .setDescription('Main image URL')
+                        .setRequired(false))
+                .addStringOption(option =>
+                    option.setName('footer')
+                        .setDescription('Footer text')
                         .setRequired(false)))
         .addSubcommand(subcommand =>
             subcommand
@@ -142,22 +154,56 @@ module.exports = {
     async sendEmbed(interaction, database) {
         try {
             const title = interaction.options.getString('title');
-            const description = interaction.options.getString('description');
+            let description = interaction.options.getString('description');
             const color = interaction.options.getString('color') || '#0099FF';
+            const thumbnail = interaction.options.getString('thumbnail');
+            const image = interaction.options.getString('image');
+            const footer = interaction.options.getString('footer');
 
+            // Convert \n to actual line breaks for description
+            if (description) {
+                description = description.replace(/\\n/g, '\n');
+            }
+
+            // Process emojis in title, description, and footer
+            const processedTitle = await this.processEmojis(title, interaction.guild);
             const processedDescription = await this.processEmojis(description, interaction.guild);
+            const processedFooter = footer ? await this.processEmojis(footer, interaction.guild) : null;
 
             const embed = new EmbedBuilder()
-                .setTitle(title)
+                .setTitle(processedTitle)
                 .setDescription(processedDescription)
-                .setColor(color)
-                .setTimestamp();
+                .setColor(color);
+
+            // Add optional elements if provided
+            if (thumbnail) {
+                try {
+                    embed.setThumbnail(thumbnail);
+                } catch (error) {
+                    console.error('Invalid thumbnail URL:', error);
+                }
+            }
+
+            if (image) {
+                try {
+                    embed.setImage(image);
+                } catch (error) {
+                    console.error('Invalid image URL:', error);
+                }
+            }
+
+            if (processedFooter) {
+                embed.setFooter({ text: processedFooter });
+            }
 
             await interaction.reply({ embeds: [embed] });
             
         } catch (error) {
             console.error('Error sending embed:', error);
-            await interaction.reply({ content: '❌ Error sending embed. Check color format (#RRGGBB) and content.', ephemeral: true });
+            await interaction.reply({ 
+                content: 'Error sending embed. Check that:\n• Color is in hex format (#FF0000)\n• Image/thumbnail URLs are valid\n• Title and description are not too long', 
+                ephemeral: true 
+            });
         }
     },
 
