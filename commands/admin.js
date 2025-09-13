@@ -1495,36 +1495,25 @@ module.exports = {
                 return;
             }
             
-            // Create the blacklist alert embed
+            // Create the simplified blacklist alert embed
             const alertEmbed = new EmbedBuilder()
-                .setTitle('⚠️ SCAMMER ALERT ⚠️')
-                .setDescription(`**${username} has been Blacklisted**`)
+                .setTitle(`${username} has been blacklisted`)
                 .addFields(
-                    { name: '👤 User', value: `<@${user.id}> (${user.id})`, inline: false },
-                    { name: '📋 Reason', value: reason, inline: false },
-                    { name: '⚠️ Warning', value: 'Do not trade with this user. They have been flagged as a scammer.', inline: false },
-                    { name: '🛡️ Stay Safe', value: 'Always use official trading methods and verify users before trading.', inline: false }
+                    { name: 'User', value: `<@${user.id}> (${user.id})`, inline: false },
+                    { name: 'Reason', value: reason, inline: false }
                 )
                 .setColor('#FF0000')
-                .setThumbnail(user.displayAvatarURL())
-                .setFooter({ 
-                    text: `Flagged by ${interaction.user.username} • ${new Date().toLocaleString()}`,
-                    iconURL: interaction.user.displayAvatarURL()
-                })
-                .setTimestamp();
+                .setFooter({ text: `Flagged by ${interaction.user.username}` });
             
-            // Send the alert
-            await alertChannel.send({ 
-                content: '@here', // Ping here to alert people
-                embeds: [alertEmbed] 
-            });
+            // Send the alert (no @here ping)
+            await alertChannel.send({ embeds: [alertEmbed] });
             
             console.log(`Scammer alert sent for ${username} (${user.id})`);
             
         } catch (error) {
             console.error('Error sending scammer alert:', error);
         }
-    },
+    }
 
     async unflagScammer(interaction, database) {
         try {
