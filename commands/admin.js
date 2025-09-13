@@ -1527,16 +1527,55 @@ module.exports = {
     },
 
     async unflagScammer(interaction, database) {
-        const user = interaction.options.getUser('user');
-        
         try {
+            const user = interaction.options.getUser('user');
+            
             await database.unflagUserAsScammer(user.id);
+            
+            // Send confirmation
             await interaction.reply(`✅ User <@${user.id}> has been unflagged successfully!`);
+            
+            // Optional: Send removal notification to scammer channel
+            await this.sendScammerRemovalAlert(interaction, user);
+            
         } catch (error) {
             console.error('Error unflagging scammer:', error);
-            await interaction.reply('❌ Error unflagging user.');
+            await interaction.reply({ 
+                content: '❌ Error unflagging user.', 
+                ephemeral: true 
+            });
         }
     },
+
+    async sendScammerRemovalAlert(interaction, user) {
+        try {
+            const scammerChannelId = process.env.SCAMMER_ALERT_CHANNEL_ID;
+            if (!scammerChannelId) return;
+            
+            const alertChannel = interaction.client.channels.cache.get(scammerChannelId);
+            if (!alertChannel) return;
+            
+            const removalEmbed = new EmbedBuilder()
+                .setTitle('✅ Scammer Status Removed')
+                .setDescription(`**${user.username} has been removed from the blacklist**`)
+                .addFields(
+                    { name: '👤 User', value: `<@${user.id}> (${user.id})`, inline: false },
+                    { name: '📝 Note', value: 'This user is no longer flagged as a scammer.', inline: false }
+                )
+                .setColor('#00FF00')
+                .setThumbnail(user.displayAvatarURL())
+                .setFooter({ 
+                    text: `Removed by ${interaction.user.username} • ${new Date().toLocaleString()}`,
+                    iconURL: interaction.user.displayAvatarURL()
+                })
+                .setTimestamp();
+            
+            await alertChannel.send({ embeds: [removalEmbed] });
+            
+        } catch (error) {
+            console.error('Error sending scammer removal alert:', error);
+        }
+    }
 
     async listScammers(interaction, database) {
         try {
