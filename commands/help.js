@@ -73,8 +73,7 @@ module.exports = {
                 }
             )
             .setColor('#0099FF')
-            .setFooter({ text: 'Use /help category:<name> for detailed command info' })
-            .setTimestamp();
+            .setFooter({ text: 'Use /help category:<name> for detailed command info' });
             
         await interaction.reply({ embeds: [embed] });
     },
@@ -145,8 +144,7 @@ module.exports = {
                 return await this.showGeneralHelp(interaction);
         }
         
-        embed.setFooter({ text: 'All admin commands require Administrator permission' })
-             .setTimestamp();
+        embed.setFooter({ text: 'All admin commands require Administrator permission' });
              
         await interaction.reply({ embeds: [embed] });
     }
