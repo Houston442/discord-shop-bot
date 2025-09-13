@@ -1331,10 +1331,27 @@ module.exports = {
         try {
             const roles = await database.getAssignableRoles();
             
+            if (roles.length === 0) {
+                return await interaction.reply('📋 No assignable roles found.');
+            }
+            
+            const roleList = roles.slice(0, 20).map(role => {
+                const managedStatus = role.is_managed ? '🤖 Managed' : '👤 Assignable';
+                const hoistedStatus = role.is_hoisted ? '📌 Hoisted' : '';
+                return `**${role.role_name}** ${hoistedStatus}\n` +
+                       `ID: ${role.role_id} | Position: ${role.role_position} | ${managedStatus}`;
+            }).join('\n\n');
+            
+            const embed = new EmbedBuilder()
+                .setTitle('🎭 Server Roles')
+                .setDescription(roleList)
+                .setColor('#0099FF')
+                .setFooter({ text: `Showing ${Math.min(roles.length, 20)} of ${roles.length} total roles` });
+            
             if (roles.length > 20) {
                 embed.addFields({ 
                     name: 'Note', 
-                    value: `${roles.length - 20} more roles not shown. Excluded: @everyone, bot roles, and managed roles.` 
+                    value: `${roles.length - 20} more roles not shown. Excluded: @everyone and bot-managed roles.` 
                 });
             }
                 
@@ -1344,7 +1361,7 @@ module.exports = {
             console.error('Error listing roles:', error);
             await interaction.reply('❌ Error retrieving roles list.');
         }
-    },
+    }
 
     async setAutoRole(interaction, database) {
         try {
