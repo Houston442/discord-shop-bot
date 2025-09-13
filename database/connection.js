@@ -201,10 +201,11 @@ class Database {
 
     async flagUserAsScammer(discordId, notes = null) {
         try {
-            await this.pool.query(
-                'UPDATE users SET is_scammer = TRUE, scammer_notes = $2 WHERE discord_id = $1',
+            const result = await this.pool.query(
+                'UPDATE users SET is_scammer = TRUE, scammer_notes = $2 WHERE discord_id = $1 RETURNING username',
                 [discordId, notes]
             );
+            return result.rows[0]; // Return user info for alert
         } catch (error) {
             console.error('Error flagging user as scammer:', error);
             throw error;
