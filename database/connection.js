@@ -803,7 +803,10 @@ class Database {
     async setPersistentChannel(channelId, message) {
         try {
             await this.pool.query(
-                'INSERT INTO persistent_channels (channel_id, message) VALUES ($1, $2) ON CONFLICT (channel_id) DO UPDATE SET message = $2',
+                `INSERT INTO persistent_channels (channel_id, message_type, message_content) 
+                 VALUES ($1, 'text', $2) 
+                 ON CONFLICT (channel_id) 
+                 DO UPDATE SET message_type = 'text', message_content = $2, updated_at = CURRENT_TIMESTAMP`,
                 [channelId, message]
             );
         } catch (error) {
