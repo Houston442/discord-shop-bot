@@ -473,8 +473,7 @@ module.exports = {
                       `**Image:** ${updatedSetup.embed_image_url ? 'Set' : 'None'}\n` +
                       `**Footer:** ${updatedSetup.embed_footer_text || 'None'}`, inline: false }
                 )
-                .setColor(updatedSetup.embed_color || '#0099FF')
-                .setTimestamp();
+                .setColor(updatedSetup.embed_color || '#0099FF');
             
             // Show a preview of the actual description if it was updated
             if (description) {
