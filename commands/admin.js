@@ -1361,7 +1361,7 @@ module.exports = {
             console.error('Error listing roles:', error);
             await interaction.reply('❌ Error retrieving roles list.');
         }
-    }
+    },
 
     async setAutoRole(interaction, database) {
         try {
