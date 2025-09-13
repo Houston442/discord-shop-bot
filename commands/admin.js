@@ -262,26 +262,62 @@ module.exports = {
                     option.setName('message')
                         .setDescription('Welcome message to send to new members')
                         .setRequired(true)))
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('setpersistent')
-                .setDescription('Set message that always stays last in channel')
-                .addChannelOption(option =>
-                    option.setName('channel')
-                        .setDescription('Channel for persistent message')
-                        .setRequired(true))
-                .addStringOption(option =>
-                    option.setName('message')
-                        .setDescription('Message to keep persistent')
-                        .setRequired(true)))
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('removepersistent')
-                .setDescription('Remove persistent message from channel')
-                .addChannelOption(option =>
-                    option.setName('channel')
-                        .setDescription('Channel to remove persistent message from')
-                        .setRequired(true)))
+        .addSubcommandGroup(group =>
+            group
+                .setName('persistent')
+                .setDescription('Manage persistent messages in channels')
+                .addSubcommand(subcommand =>
+                    subcommand
+                        .setName('text')
+                        .setDescription('Set a persistent text message in channel')
+                        .addChannelOption(option =>
+                            option.setName('channel')
+                                .setDescription('Channel for persistent message')
+                                .setRequired(true))
+                        .addStringOption(option =>
+                            option.setName('message')
+                                .setDescription('Message to keep persistent')
+                                .setRequired(true)))
+                .addSubcommand(subcommand =>
+                    subcommand
+                        .setName('embed')
+                        .setDescription('Set a persistent embed message in channel')
+                        .addChannelOption(option =>
+                            option.setName('channel')
+                                .setDescription('Channel for persistent embed')
+                                .setRequired(true))
+                        .addStringOption(option =>
+                            option.setName('title')
+                                .setDescription('Embed title')
+                                .setRequired(true))
+                        .addStringOption(option =>
+                            option.setName('description')
+                                .setDescription('Embed description (use \\n for line breaks)')
+                                .setRequired(true))
+                        .addStringOption(option =>
+                            option.setName('color')
+                                .setDescription('Embed color (hex format like #FF0000)')
+                                .setRequired(false))
+                        .addStringOption(option =>
+                            option.setName('thumbnail')
+                                .setDescription('Thumbnail image URL')
+                                .setRequired(false))
+                        .addStringOption(option =>
+                            option.setName('image')
+                                .setDescription('Main image URL')
+                                .setRequired(false))
+                        .addStringOption(option =>
+                            option.setName('footer')
+                                .setDescription('Footer text')
+                                .setRequired(false)))
+                .addSubcommand(subcommand =>
+                    subcommand
+                        .setName('remove')
+                        .setDescription('Remove persistent message from channel')
+                        .addChannelOption(option =>
+                            option.setName('channel')
+                                .setDescription('Channel to remove persistent message from')
+                                .setRequired(true))))
         // System Commands
         .addSubcommand(subcommand =>
             subcommand
