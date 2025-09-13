@@ -1495,7 +1495,7 @@ module.exports = {
                 return;
             }
             
-            // Create the simplified blacklist alert embed
+            // Create the simplified blacklist alert embed with profile pictures
             const alertEmbed = new EmbedBuilder()
                 .setTitle(`${username} has been blacklisted`)
                 .addFields(
@@ -1503,7 +1503,11 @@ module.exports = {
                     { name: 'Reason', value: reason, inline: false }
                 )
                 .setColor('#FF0000')
-                .setFooter({ text: `Flagged by ${interaction.user.username}` });
+                .setThumbnail(user.displayAvatarURL())
+                .setFooter({ 
+                    text: `Flagged by ${interaction.user.username}`,
+                    iconURL: interaction.user.displayAvatarURL()
+                });
             
             // Send the alert (no @here ping)
             await alertChannel.send({ embeds: [alertEmbed] });
