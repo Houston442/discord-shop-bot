@@ -1390,7 +1390,7 @@ module.exports = {
             console.error('Error setting auto role:', error);
             await interaction.reply('❌ Error setting auto role.');
         }
-    }
+    },
 
     // ==================== SCAMMER MANAGEMENT METHODS ====================
 
