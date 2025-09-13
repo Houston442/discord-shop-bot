@@ -1536,36 +1536,6 @@ module.exports = {
         }
     },
 
-    async sendScammerRemovalAlert(interaction, user) {
-        try {
-            const scammerChannelId = process.env.SCAMMER_ALERT_CHANNEL_ID;
-            if (!scammerChannelId) return;
-            
-            const alertChannel = interaction.client.channels.cache.get(scammerChannelId);
-            if (!alertChannel) return;
-            
-            const removalEmbed = new EmbedBuilder()
-                .setTitle('✅ Scammer Status Removed')
-                .setDescription(`**${user.username} has been removed from the blacklist**`)
-                .addFields(
-                    { name: '👤 User', value: `<@${user.id}> (${user.id})`, inline: false },
-                    { name: '📝 Note', value: 'This user is no longer flagged as a scammer.', inline: false }
-                )
-                .setColor('#00FF00')
-                .setThumbnail(user.displayAvatarURL())
-                .setFooter({ 
-                    text: `Removed by ${interaction.user.username} • ${new Date().toLocaleString()}`,
-                    iconURL: interaction.user.displayAvatarURL()
-                })
-                .setTimestamp();
-            
-            await alertChannel.send({ embeds: [removalEmbed] });
-            
-        } catch (error) {
-            console.error('Error sending scammer removal alert:', error);
-        }
-    },
-
     async listScammers(interaction, database) {
         try {
             const scammers = await database.getAllScammers();
