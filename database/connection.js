@@ -1,4 +1,4 @@
-// database/connection.js - Complete File with Role Management System
+// database/connection.js - Complete Clean Version with Welcome Embed System
 const { Pool } = require('pg');
 
 class Database {
@@ -49,7 +49,7 @@ class Database {
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`,
 
-            // Messages/Activity table - NOW ONLY FOR COMMANDS
+            // Messages/Activity table - ONLY FOR COMMANDS
             `CREATE TABLE IF NOT EXISTS messages (
                 message_id VARCHAR(20) PRIMARY KEY,
                 user_id VARCHAR(20) REFERENCES users(discord_id),
@@ -59,7 +59,7 @@ class Database {
                 command_used VARCHAR(50)
             )`,
 
-            // Bot configuration table
+            // Bot configuration table with welcome embed settings
             `CREATE TABLE IF NOT EXISTS bot_config (
                 config_key VARCHAR(50) PRIMARY KEY,
                 config_value TEXT,
@@ -137,10 +137,17 @@ class Database {
     }
 
     async setDefaultConfigs() {
-        const defaultWelcome = "🎮 Welcome to our Game Shop Discord! 🎮\n\nHere you can browse and purchase in-game items safely. Check out our channels and don't forget to select your roles!\n\n⚠️ Remember: Always use our official trading system to stay protected from scammers.";
+        const defaultWelcome = "Welcome to our Game Shop Discord!\n\nHere you can browse and purchase in-game items safely. Check out our channels and don't forget to select your roles!\n\nRemember: Always use our official trading system to stay protected from scammers.";
         
         const configs = [
             ['welcome_message', defaultWelcome],
+            ['welcome_embed_title', 'Welcome to the Server!'],
+            ['welcome_embed_description', defaultWelcome],
+            ['welcome_embed_color', '#00FF00'],
+            ['welcome_embed_thumbnail', null],
+            ['welcome_embed_image', null],
+            ['welcome_embed_footer', null],
+            ['welcome_use_embed', 'true'],
             ['auto_role', 'Tesco Clubcard']
         ];
 
@@ -154,7 +161,6 @@ class Database {
 
     // ==================== USER MANAGEMENT METHODS ====================
 
-    // Enhanced addUser function with conflict handling
     async addUser(discordId, username, discriminator) {
         try {
             await this.pool.query(
@@ -173,7 +179,6 @@ class Database {
         }
     }
 
-    // Update existing user information
     async updateUserInfo(discordId, username, discriminator) {
         try {
             await this.pool.query(
@@ -186,7 +191,6 @@ class Database {
         }
     }
 
-    // Flag user as scammer
     async flagUserAsScammer(discordId, notes = null) {
         try {
             await this.pool.query(
@@ -199,7 +203,6 @@ class Database {
         }
     }
 
-    // Remove scammer flag from user
     async unflagUserAsScammer(discordId) {
         try {
             await this.pool.query(
@@ -212,7 +215,6 @@ class Database {
         }
     }
 
-    // Get user information
     async getUserInfo(discordId) {
         try {
             const result = await this.pool.query(
@@ -226,7 +228,6 @@ class Database {
         }
     }
 
-    // Get all flagged scammers
     async getAllScammers() {
         try {
             const result = await this.pool.query(
@@ -239,7 +240,6 @@ class Database {
         }
     }
 
-    // Get user count (excluding scammers)
     async getUserCount() {
         try {
             const result = await this.pool.query('SELECT COUNT(*) as count FROM users WHERE is_scammer = FALSE');
@@ -250,7 +250,6 @@ class Database {
         }
     }
 
-    // Get total user count (including scammers)
     async getTotalUserCount() {
         try {
             const result = await this.pool.query('SELECT COUNT(*) as count FROM users');
@@ -261,7 +260,6 @@ class Database {
         }
     }
 
-    // Get recent users
     async getRecentUsers(limit = 10) {
         try {
             const result = await this.pool.query(
@@ -277,7 +275,6 @@ class Database {
 
     // ==================== SELLER TRACKING METHODS ====================
 
-    // Get seller statistics for a user
     async getSellerStats(userId) {
         try {
             const result = await this.pool.query(
@@ -291,7 +288,6 @@ class Database {
         }
     }
 
-    // Get top sellers leaderboard
     async getTopSellers(limit = 10) {
         try {
             const result = await this.pool.query(
@@ -305,7 +301,6 @@ class Database {
         }
     }
 
-    // Update seller stats when transaction is completed
     async updateSellerStats(createdBy, totalAmount) {
         try {
             if (createdBy) {
@@ -322,15 +317,12 @@ class Database {
 
     // ==================== TRANSACTION METHODS ====================
 
-    // Add new transaction - FIXED: Don't update buyer stats immediately
     async addTransaction(userId, itemName, quantity, unitPrice, totalAmount, createdBy = null) {
         try {
             const result = await this.pool.query(
                 'INSERT INTO transactions (user_id, item_name, quantity, unit_price, total_amount, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING transaction_id',
                 [userId, itemName, quantity, unitPrice, totalAmount, createdBy]
             );
-            
-            // DON'T update buyer stats here - wait until transaction is completed
             
             return result.rows[0].transaction_id;
         } catch (error) {
@@ -339,10 +331,8 @@ class Database {
         }
     }
 
-    // Update transaction status - FIXED: Update stats based on status
     async updateTransactionStatus(transactionId, status) {
         try {
-            // Get transaction details first
             const transactionResult = await this.pool.query(
                 'SELECT * FROM transactions WHERE transaction_id = $1',
                 [transactionId]
@@ -353,40 +343,31 @@ class Database {
                 throw new Error('Transaction not found');
             }
             
-            // Update status
             await this.pool.query(
                 'UPDATE transactions SET status = $2 WHERE transaction_id = $1',
                 [transactionId, status]
             );
             
-            // Update stats based on the new status
             if (status === 'completed') {
-                // Update buyer stats when completed
                 await this.pool.query(
                     'UPDATE users SET total_purchases = total_purchases + 1, total_spent = total_spent + $2 WHERE discord_id = $1',
                     [transaction.user_id, transaction.total_amount]
                 );
                 
-                // Update seller stats when completed
                 if (transaction.created_by) {
                     await this.updateSellerStats(transaction.created_by, transaction.total_amount);
                 }
-            } else if (status === 'cancelled') {
-                // If transaction was previously completed and now cancelled, reverse the stats
-                if (transaction.status === 'completed') {
-                    // Reverse buyer stats
+            } else if (status === 'cancelled' && transaction.status === 'completed') {
+                await this.pool.query(
+                    'UPDATE users SET total_purchases = total_purchases - 1, total_spent = total_spent - $2 WHERE discord_id = $1',
+                    [transaction.user_id, transaction.total_amount]
+                );
+                
+                if (transaction.created_by) {
                     await this.pool.query(
-                        'UPDATE users SET total_purchases = total_purchases - 1, total_spent = total_spent - $2 WHERE discord_id = $1',
-                        [transaction.user_id, transaction.total_amount]
+                        'UPDATE users SET total_sales = total_sales - 1, total_earned = total_earned - $2 WHERE discord_id = $1',
+                        [transaction.created_by, transaction.total_amount]
                     );
-                    
-                    // Reverse seller stats
-                    if (transaction.created_by) {
-                        await this.pool.query(
-                            'UPDATE users SET total_sales = total_sales - 1, total_earned = total_earned - $2 WHERE discord_id = $1',
-                            [transaction.created_by, transaction.total_amount]
-                        );
-                    }
                 }
             }
             
@@ -396,7 +377,6 @@ class Database {
         }
     }
 
-    // Get user transactions
     async getUserTransactions(userId) {
         try {
             const result = await this.pool.query(
@@ -410,7 +390,6 @@ class Database {
         }
     }
 
-    // Get all transactions (admin use)
     async getAllTransactions(limit = 50) {
         try {
             const result = await this.pool.query(
@@ -429,7 +408,6 @@ class Database {
         }
     }
 
-    // Get transaction by ID with user info
     async getTransactionById(transactionId) {
         try {
             const result = await this.pool.query(
@@ -449,7 +427,6 @@ class Database {
 
     // ==================== ROLE MANAGEMENT METHODS ====================
 
-    // Add or update a server role
     async addServerRole(roleId, roleName, roleColor, rolePosition, rolePermissions, isHoisted, isMentionable, isManaged) {
         try {
             await this.pool.query(
@@ -473,7 +450,6 @@ class Database {
         }
     }
 
-    // Remove a server role
     async removeServerRole(roleId) {
         try {
             await this.pool.query(
@@ -486,7 +462,6 @@ class Database {
         }
     }
 
-    // Get all server roles
     async getAllServerRoles() {
         try {
             const result = await this.pool.query(
@@ -499,7 +474,6 @@ class Database {
         }
     }
 
-    // Get assignable roles (exclude @everyone, bot roles, etc.)
     async getAssignableRoles() {
         try {
             const result = await this.pool.query(
@@ -512,7 +486,6 @@ class Database {
         }
     }
 
-    // Get role by name
     async getRoleByName(roleName) {
         try {
             const result = await this.pool.query(
@@ -528,7 +501,6 @@ class Database {
 
     // ==================== ROLE SETUP METHODS ====================
 
-    // Create a new role setup
     async createRoleSetup(setupName, createdBy, embedTitle, embedDescription, embedThumbnailUrl, embedImageUrl, embedColor, embedFooterText) {
         try {
             const result = await this.pool.query(
@@ -544,7 +516,6 @@ class Database {
         }
     }
 
-    // Add option to role setup
     async addRoleSetupOption(setupId, optionLabel, optionDescription, optionEmoji, discordRoleId, optionOrder) {
         try {
             await this.pool.query(
@@ -557,7 +528,6 @@ class Database {
         }
     }
 
-    // Update role setup deployment info
     async updateRoleSetupDeployment(setupId, channelId, messageId) {
         try {
             await this.pool.query(
@@ -570,7 +540,6 @@ class Database {
         }
     }
 
-    // Get role setup by ID
     async getRoleSetup(setupId) {
         try {
             const result = await this.pool.query(
@@ -584,7 +553,6 @@ class Database {
         }
     }
 
-    // Get role setup options
     async getRoleSetupOptions(setupId) {
         try {
             const result = await this.pool.query(
@@ -602,7 +570,6 @@ class Database {
         }
     }
 
-    // Get all role setups
     async getAllRoleSetups() {
         try {
             const result = await this.pool.query(
@@ -615,7 +582,6 @@ class Database {
         }
     }
 
-    // Delete role setup
     async deleteRoleSetup(setupId) {
         try {
             await this.pool.query(
@@ -630,10 +596,8 @@ class Database {
 
     // ==================== MESSAGE LOGGING METHODS ====================
 
-    // Log ONLY bot commands (messages starting with !)
     async logMessage(messageId, userId, channelId, content, commandUsed = null) {
         try {
-            // Only log if it's a command (content starts with !)
             if (content && content.startsWith('!')) {
                 await this.pool.query(
                     'INSERT INTO messages (message_id, user_id, channel_id, content, command_used) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (message_id) DO NOTHING',
@@ -641,7 +605,6 @@ class Database {
                 );
             }
             
-            // Always update user last activity regardless of message type
             await this.pool.query(
                 'UPDATE users SET last_activity = CURRENT_TIMESTAMP WHERE discord_id = $1',
                 [userId]
@@ -652,7 +615,6 @@ class Database {
         }
     }
 
-    // Update user activity without logging message content
     async updateLastActivity(userId) {
         try {
             await this.pool.query(
@@ -665,7 +627,6 @@ class Database {
         }
     }
 
-    // Get user activity stats (now only shows command activity)
     async getUserActivity(userId, days = 7) {
         try {
             const result = await this.pool.query(
@@ -691,7 +652,6 @@ class Database {
 
     // ==================== CONFIGURATION METHODS ====================
 
-    // Get welcome message
     async getWelcomeMessage() {
         try {
             const result = await this.pool.query(
@@ -705,7 +665,6 @@ class Database {
         }
     }
 
-    // Set welcome message
     async setWelcomeMessage(message) {
         try {
             await this.pool.query(
@@ -718,7 +677,6 @@ class Database {
         }
     }
 
-    // Get auto role
     async getAutoRole() {
         try {
             const result = await this.pool.query(
@@ -732,7 +690,6 @@ class Database {
         }
     }
 
-    // Set auto role
     async setAutoRole(roleName) {
         try {
             await this.pool.query(
@@ -745,7 +702,6 @@ class Database {
         }
     }
 
-    // Get configuration value
     async getConfig(key) {
         try {
             const result = await this.pool.query(
@@ -759,7 +715,6 @@ class Database {
         }
     }
 
-    // Set configuration value
     async setConfig(key, value) {
         try {
             await this.pool.query(
@@ -774,7 +729,6 @@ class Database {
 
     // ==================== CREATOR MANAGEMENT METHODS ====================
 
-    // Add creator for monitoring
     async addCreator(platform, creatorId, creatorName, channelId) {
         try {
             await this.pool.query(
@@ -787,7 +741,6 @@ class Database {
         }
     }
 
-    // Remove creator from monitoring
     async removeCreator(platform, creatorId) {
         try {
             await this.pool.query(
@@ -800,7 +753,6 @@ class Database {
         }
     }
 
-    // Get creators by platform
     async getCreators(platform) {
         try {
             const result = await this.pool.query(
@@ -814,7 +766,6 @@ class Database {
         }
     }
 
-    // Update creator's last video/stream info
     async updateCreatorLastVideo(creatorId, platform, lastVideoId) {
         try {
             await this.pool.query(
@@ -827,7 +778,6 @@ class Database {
         }
     }
 
-    // Update creator live status
     async updateCreatorLiveStatus(creatorId, platform, isLive) {
         try {
             await this.pool.query(
@@ -842,7 +792,6 @@ class Database {
 
     // ==================== PERSISTENT MESSAGE METHODS ====================
 
-    // Set persistent message for channel
     async setPersistentChannel(channelId, message) {
         try {
             await this.pool.query(
@@ -855,7 +804,6 @@ class Database {
         }
     }
 
-    // Remove persistent message from channel
     async removePersistentChannel(channelId) {
         try {
             await this.pool.query(
@@ -868,7 +816,6 @@ class Database {
         }
     }
 
-    // Get persistent channel configuration
     async getPersistentChannelConfig(channelId) {
         try {
             const result = await this.pool.query(
@@ -882,7 +829,6 @@ class Database {
         }
     }
 
-    // Get all persistent channels
     async getAllPersistentChannels() {
         try {
             const result = await this.pool.query('SELECT * FROM persistent_channels');
@@ -895,7 +841,6 @@ class Database {
 
     // ==================== BACKUP AND UTILITY METHODS ====================
 
-    // Get backup data for all tables
     async getBackupData() {
         try {
             const tables = ['users', 'transactions', 'messages', 'bot_config', 'creators', 'persistent_channels', 'server_roles', 'role_setups', 'role_setup_options'];
@@ -913,19 +858,16 @@ class Database {
         }
     }
 
-    // Get database statistics
     async getDatabaseStats() {
         try {
             const stats = {};
             
-            // Table row counts
             const tables = ['users', 'transactions', 'messages', 'creators', 'persistent_channels', 'server_roles', 'role_setups'];
             for (const table of tables) {
                 const result = await this.pool.query(`SELECT COUNT(*) as count FROM ${table}`);
                 stats[`${table}_count`] = parseInt(result.rows[0].count);
             }
             
-            // Additional stats
             const scammerResult = await this.pool.query('SELECT COUNT(*) as count FROM users WHERE is_scammer = TRUE');
             stats.scammer_count = parseInt(scammerResult.rows[0].count);
             
@@ -945,7 +887,6 @@ class Database {
         }
     }
 
-    // Test database connection
     async testConnection() {
         try {
             const result = await this.pool.query('SELECT NOW() as current_time');
@@ -957,7 +898,6 @@ class Database {
         }
     }
 
-    // Close database connection
     async close() {
         try {
             await this.pool.end();
