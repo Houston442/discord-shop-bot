@@ -1550,6 +1550,45 @@ module.exports = {
         }
     },
 
+    async setPersistentEmbed(interaction, database) {
+        const channel = interaction.options.getChannel('channel');
+        const title = interaction.options.getString('title');
+        let description = interaction.options.getString('description');
+        const color = interaction.options.getString('color') || '#0099FF';
+        const thumbnail = interaction.options.getString('thumbnail');
+        const image = interaction.options.getString('image');
+        const footer = interaction.options.getString('footer');
+        
+        try {
+            // Convert \n to actual line breaks
+            if (description) {
+                description = description.replace(/\\n/g, '\n');
+            }
+            
+            await database.setPersistentChannelEmbed(channel.id, title, description, color, thumbnail, image, footer);
+            
+            const embed = new EmbedBuilder()
+                .setTitle('✅ Persistent Embed Message Set')
+                .setDescription(`Persistent embed configured for ${channel}`)
+                .addFields(
+                    { name: 'Title', value: title, inline: true },
+                    { name: 'Color', value: color, inline: true },
+                    { name: 'Description Preview', value: description.length > 100 ? description.substring(0, 100) + '...' : description, inline: false }
+                )
+                .setColor('#00FF00');
+                
+            if (thumbnail) embed.addFields({ name: 'Thumbnail', value: 'Set', inline: true });
+            if (image) embed.addFields({ name: 'Image', value: 'Set', inline: true });
+            if (footer) embed.addFields({ name: 'Footer', value: footer, inline: true });
+            
+            await interaction.reply({ embeds: [embed] });
+            
+        } catch (error) {
+            console.error('Error setting persistent embed:', error);
+            await interaction.reply('❌ Error setting persistent embed. Check that color is in hex format and URLs are valid.');
+        }
+    },
+
     // ==================== SYSTEM METHODS ====================
 
     async manualBackup(interaction, database) {
