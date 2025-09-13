@@ -894,7 +894,7 @@ class Database {
             console.error('Error setting persistent channel text:', error);
             throw error;
         }
-    },
+    }
     
     // ==================== BACKUP AND UTILITY METHODS ====================
 
