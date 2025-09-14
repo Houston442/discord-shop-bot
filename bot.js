@@ -166,13 +166,41 @@ class ShopBot {
     }
 
     async handleSlashCommand(interaction) {
+        // SECURITY CHECK: Only allow commands in the specified guild
+        const allowedGuildId = process.env.GUILD_ID || process.env.ALLOWED_GUILD_ID;
+        
+        if (!allowedGuildId) {
+            console.error('SECURITY WARNING: No GUILD_ID set in environment variables!');
+            return await interaction.reply({ 
+                content: 'Bot configuration error. Contact administrator.', 
+                ephemeral: true 
+            });
+        }
+        
+        // Block commands in DMs
+        if (!interaction.guild) {
+            return await interaction.reply({ 
+                content: '❌ Commands can only be used in the server, not in DMs.', 
+                ephemeral: true 
+            });
+        }
+        
+        // Block commands in wrong servers
+        if (interaction.guild.id !== allowedGuildId) {
+            console.log(`Blocked command attempt from unauthorized guild: ${interaction.guild.id} (${interaction.guild.name})`);
+            return await interaction.reply({ 
+                content: '❌ This bot is not authorized for use in this server.', 
+                ephemeral: true 
+            });
+        }
+        
         const command = this.commands.get(interaction.commandName);
-
+    
         if (!command) {
             console.error(`No command matching ${interaction.commandName} was found.`);
             return;
         }
-
+    
         try {
             await command.execute(interaction, this.database, this);
         } catch (error) {
@@ -186,7 +214,7 @@ class ShopBot {
             }
         }
     }
-
+    
     async handleMemberJoin(member) {
         try {
             console.log(`New member joined: ${member.user.username}`);
