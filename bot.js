@@ -140,6 +140,32 @@ class ShopBot {
         // Interaction create (Slash commands, role selection, buttons, etc.)
         this.client.on('interactionCreate', async (interaction) => {
             try {
+                // Security check for ALL interactions
+                const allowedGuildId = process.env.GUILD_ID || process.env.ALLOWED_GUILD_ID;
+                
+                // Block DM interactions
+                if (!interaction.guild) {
+                    if (interaction.isRepliable()) {
+                        return await interaction.reply({ 
+                            content: '❌ This bot only works in the server, not in DMs.', 
+                            ephemeral: true 
+                        });
+                    }
+                    return;
+                }
+                
+                // Block wrong server interactions
+                if (interaction.guild.id !== allowedGuildId) {
+                    if (interaction.isRepliable()) {
+                        return await interaction.reply({ 
+                            content: '❌ This bot is not authorized for use in this server.', 
+                            ephemeral: true 
+                        });
+                    }
+                    return;
+                }
+                
+                // Process the interaction normally
                 if (interaction.isChatInputCommand()) {
                     await this.handleSlashCommand(interaction);
                 } else if (interaction.isStringSelectMenu()) {
@@ -149,7 +175,7 @@ class ShopBot {
                 }
             } catch (error) {
                 console.error('Error handling interaction:', error);
-                if (!interaction.replied && !interaction.deferred) {
+                if (!interaction.replied && !interaction.deferred && interaction.isRepliable()) {
                     await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
                 }
             }
