@@ -1008,7 +1008,7 @@ module.exports = {
             const useEmbed = (await database.getConfig('welcome_use_embed')) === 'true';
             
             if (!useEmbed) {
-                const textMessage = await database.getWelcomeMessage();
+                const textMessage = await database.getWelcomeMessage() || 'Welcome!';
                 const processedMessage = textMessage
                     .replace(/{username}/g, interaction.user.username)
                     .replace(/{avatar}/g, interaction.user.displayAvatarURL());
@@ -1028,32 +1028,46 @@ module.exports = {
                 const processedDescription = description
                     .replace(/{username}/g, interaction.user.username)
                     .replace(/{avatar}/g, interaction.user.displayAvatarURL());
-                const processedFooter = footer ? footer
-                    .replace(/{username}/g, interaction.user.username)
-                    .replace(/{avatar}/g, interaction.user.displayAvatarURL()) : null;
                 
                 const embed = new EmbedBuilder()
                     .setTitle(processedTitle)
                     .setDescription(processedDescription)
                     .setColor(color);
                 
-                if (thumbnail) {
+                // Handle thumbnail with proper variable processing
+                if (thumbnail && thumbnail.trim() !== '') {
                     const processedThumbnail = thumbnail
                         .replace(/{username}/g, interaction.user.username)
                         .replace(/{avatar}/g, interaction.user.displayAvatarURL());
-                    embed.setThumbnail(processedThumbnail);
-                } else {
+                    
+                    // Only set thumbnail if it's a valid URL after processing
+                    if (processedThumbnail.startsWith('http')) {
+                        embed.setThumbnail(processedThumbnail);
+                    }
+                }
+                
+                // Always add user avatar as fallback if no valid thumbnail
+                if (!thumbnail || thumbnail.trim() === '' || !thumbnail.startsWith('http')) {
                     embed.setThumbnail(interaction.user.displayAvatarURL());
                 }
                 
-                if (image) {
+                // Handle image with proper variable processing
+                if (image && image.trim() !== '') {
                     const processedImage = image
                         .replace(/{username}/g, interaction.user.username)
                         .replace(/{avatar}/g, interaction.user.displayAvatarURL());
-                    embed.setImage(processedImage);
+                    
+                    // Only set image if it's a valid URL after processing
+                    if (processedImage.startsWith('http')) {
+                        embed.setImage(processedImage);
+                    }
                 }
                 
-                if (processedFooter) {
+                // Handle footer
+                if (footer && footer.trim() !== '') {
+                    const processedFooter = footer
+                        .replace(/{username}/g, interaction.user.username)
+                        .replace(/{avatar}/g, interaction.user.displayAvatarURL());
                     embed.setFooter({ text: processedFooter });
                 }
                 
@@ -1064,7 +1078,7 @@ module.exports = {
             
         } catch (error) {
             console.error('Error sending test welcome:', error);
-            await interaction.reply('❌ Error sending test message. Make sure your DMs are open.');
+            await interaction.reply({ content: '❌ Error sending test message. Make sure your DMs are open.', ephemeral: true });
         }
     },
 
