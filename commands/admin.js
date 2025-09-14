@@ -938,8 +938,12 @@ module.exports = {
             
             if (!useEmbed) {
                 const textMessage = await database.getWelcomeMessage();
+                const exampleMessage = textMessage
+                    .replace(/{username}/g, interaction.user.username)
+                    .replace(/{avatar}/g, interaction.user.displayAvatarURL());
+                
                 return await interaction.reply({
-                    content: `**Current Welcome Message (Plain Text):**\n\n${textMessage}`,
+                    content: `**Current Welcome Message (Plain Text):**\n\n${exampleMessage}`,
                     ephemeral: true
                 });
             }
@@ -951,17 +955,44 @@ module.exports = {
             const image = await database.getConfig('welcome_embed_image');
             const footer = await database.getConfig('welcome_embed_footer');
             
+            // Process variables for preview using the command user
+            const processedTitle = title
+                .replace(/{username}/g, interaction.user.username)
+                .replace(/{avatar}/g, interaction.user.displayAvatarURL());
+            const processedDescription = description
+                .replace(/{username}/g, interaction.user.username)
+                .replace(/{avatar}/g, interaction.user.displayAvatarURL());
+            const processedFooter = footer ? footer
+                .replace(/{username}/g, interaction.user.username)
+                .replace(/{avatar}/g, interaction.user.displayAvatarURL()) : null;
+            
             const embed = new EmbedBuilder()
-                .setTitle(title)
-                .setDescription(description)
+                .setTitle(processedTitle)
+                .setDescription(processedDescription)
                 .setColor(color);
             
-            if (thumbnail) embed.setThumbnail(thumbnail);
-            if (image) embed.setImage(image);
-            if (footer) embed.setFooter({ text: footer });
+            if (thumbnail) {
+                const processedThumbnail = thumbnail
+                    .replace(/{username}/g, interaction.user.username)
+                    .replace(/{avatar}/g, interaction.user.displayAvatarURL());
+                embed.setThumbnail(processedThumbnail);
+            } else {
+                embed.setThumbnail(interaction.user.displayAvatarURL());
+            }
+            
+            if (image) {
+                const processedImage = image
+                    .replace(/{username}/g, interaction.user.username)
+                    .replace(/{avatar}/g, interaction.user.displayAvatarURL());
+                embed.setImage(processedImage);
+            }
+            
+            if (processedFooter) {
+                embed.setFooter({ text: processedFooter });
+            }
             
             await interaction.reply({
-                content: '**Preview of Current Welcome Message:**',
+                content: '**Preview of Current Welcome Message (using your info as example):**',
                 embeds: [embed],
                 ephemeral: true
             });
@@ -978,25 +1009,19 @@ module.exports = {
             
             if (!useEmbed) {
                 const textMessage = await database.getWelcomeMessage();
-                await interaction.user.send(`**Test Welcome Message:**\n\n${textMessage}`);
+                const processedMessage = textMessage
+                    .replace(/{username}/g, interaction.user.username)
+                    .replace(/{avatar}/g, interaction.user.displayAvatarURL());
+                await interaction.user.send(`**Test Welcome Message:**\n\n${processedMessage}`);
             } else {
-                const title = await database.getConfig('welcome_embed_title') || 'Welcome to the Server!';
-                const description = await database.getConfig('welcome_embed_description') || 'Welcome!';
-                const color = await database.getConfig('welcome_embed_color') || '#00FF00';
-                const thumbnail = await database.getConfig('welcome_embed_thumbnail');
-                const image = await database.getConfig('welcome_embed_image');
-                const footer = await database.getConfig('welcome_embed_footer');
+                // Create a mock member object for testing
+                const mockMember = {
+                    user: interaction.user
+                };
                 
-                const embed = new EmbedBuilder()
-                    .setTitle(title)
-                    .setDescription(description)
-                    .setColor(color);
-                
-                if (thumbnail) embed.setThumbnail(thumbnail);
-                if (image) embed.setImage(image);
-                if (footer) embed.setFooter({ text: footer });
-                
-                await interaction.user.send({ embeds: [embed] });
+                // Use the same method that handles real welcomes
+                const bot = interaction.client.shopBot || interaction.client;
+                await bot.sendEmbedWelcome(mockMember);
             }
             
             await interaction.reply({ content: '✅ Test welcome message sent to your DMs!', ephemeral: true });
