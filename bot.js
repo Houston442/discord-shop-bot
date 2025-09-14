@@ -1,4 +1,4 @@
-// bot.js - Complete Clean Version with All Updates
+// bot.js - Complete Clean Version with Welcome Variables System
 const { Client, GatewayIntentBits, Collection, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, REST, Routes } = require('discord.js');
 const { Pool } = require('pg');
 const cron = require('node-cron');
@@ -136,7 +136,7 @@ class ShopBot {
             await this.trackUserActivity(message);
             await this.handlePersistentMessage(message);
         });
-    
+
         // Interaction create (Slash commands, role selection, buttons, etc.)
         this.client.on('interactionCreate', async (interaction) => {
             try {
@@ -202,35 +202,10 @@ class ShopBot {
             
             if (useEmbed) {
                 // Send embed welcome message
-                const title = await this.database.getConfig('welcome_embed_title') || 'Welcome to the Server!';
-                const description = await this.database.getConfig('welcome_embed_description') || 'Welcome!';
-                const color = await this.database.getConfig('welcome_embed_color') || '#00FF00';
-                const thumbnail = await this.database.getConfig('welcome_embed_thumbnail');
-                const image = await this.database.getConfig('welcome_embed_image');
-                const footer = await this.database.getConfig('welcome_embed_footer');
-                
-                const embed = new EmbedBuilder()
-                    .setTitle(title)
-                    .setDescription(description)
-                    .setColor(color)
-                    .setThumbnail(member.user.displayAvatarURL());
-                
-                // Override thumbnail if custom one is set
-                if (thumbnail) embed.setThumbnail(thumbnail);
-                if (image) embed.setImage(image);
-                if (footer) embed.setFooter({ text: footer });
-                
-                await member.send({ embeds: [embed] });
+                await this.sendEmbedWelcome(member);
             } else {
                 // Send text welcome message (legacy)
-                const welcomeMessage = await this.database.getWelcomeMessage();
-                const embed = new EmbedBuilder()
-                    .setTitle('Welcome to the Server!')
-                    .setDescription(welcomeMessage || 'Welcome! Thanks for joining our server.')
-                    .setColor('#00FF00')
-                    .setThumbnail(member.user.displayAvatarURL());
-
-                await member.send({ embeds: [embed] });
+                await this.sendTextWelcome(member);
             }
             
             console.log(`Sent welcome message to ${member.user.tag}`);
@@ -238,6 +213,67 @@ class ShopBot {
         } catch (error) {
             console.error('Error handling member join:', error);
         }
+    }
+
+    // Process welcome message variables
+    processWelcomeVariables(text, member) {
+        if (!text) return text;
+        
+        return text
+            .replace(/{username}/g, member.user.username)
+            .replace(/{avatar}/g, member.user.displayAvatarURL());
+    }
+
+    async sendEmbedWelcome(member) {
+        const title = await this.database.getConfig('welcome_embed_title') || 'Welcome to the Server!';
+        const description = await this.database.getConfig('welcome_embed_description') || 'Welcome!';
+        const color = await this.database.getConfig('welcome_embed_color') || '#00FF00';
+        const thumbnail = await this.database.getConfig('welcome_embed_thumbnail');
+        const image = await this.database.getConfig('welcome_embed_image');
+        const footer = await this.database.getConfig('welcome_embed_footer');
+        
+        // Process variables in title and description
+        const processedTitle = this.processWelcomeVariables(title, member);
+        const processedDescription = this.processWelcomeVariables(description, member);
+        const processedFooter = footer ? this.processWelcomeVariables(footer, member) : null;
+        
+        const embed = new EmbedBuilder()
+            .setTitle(processedTitle)
+            .setDescription(processedDescription)
+            .setColor(color);
+        
+        // Handle thumbnail - use {avatar} variable or default to user avatar
+        if (thumbnail) {
+            const processedThumbnail = this.processWelcomeVariables(thumbnail, member);
+            embed.setThumbnail(processedThumbnail);
+        } else {
+            embed.setThumbnail(member.user.displayAvatarURL());
+        }
+        
+        // Handle image - process variables if set
+        if (image) {
+            const processedImage = this.processWelcomeVariables(image, member);
+            embed.setImage(processedImage);
+        }
+        
+        if (processedFooter) {
+            embed.setFooter({ text: processedFooter });
+        }
+        
+        await member.send({ embeds: [embed] });
+    }
+
+    async sendTextWelcome(member) {
+        const welcomeMessage = await this.database.getWelcomeMessage();
+        const processedMessage = this.processWelcomeVariables(welcomeMessage || 'Welcome! Thanks for joining our server.', member);
+        
+        const embed = new EmbedBuilder()
+            .setTitle('Welcome to the Server!')
+            .setDescription(processedMessage)
+            .setColor('#00FF00')
+            .setThumbnail(member.user.displayAvatarURL());
+
+        await member.send({ embeds: [embed] });
     }
 
     async assignAutoRole(member) {
@@ -363,7 +399,7 @@ class ShopBot {
         try {
             const channelConfig = await this.database.getPersistentChannelConfig(message.channel.id);
             if (!channelConfig) return;
-    
+
             if (this.persistentMessages.has(message.channel.id)) {
                 const oldMessage = this.persistentMessages.get(message.channel.id);
                 try {
@@ -372,7 +408,7 @@ class ShopBot {
                     console.log('Could not delete old persistent message:', error.message);
                 }
             }
-    
+
             let newMessage;
             
             if (channelConfig.message_type === 'embed') {
@@ -410,7 +446,7 @@ class ShopBot {
             console.error('Error handling persistent message:', error);
         }
     }
-    
+
     async handleRoleSelection(interaction) {
         try {
             if (interaction.customId.startsWith('role_setup_')) {
