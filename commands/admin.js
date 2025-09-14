@@ -1014,14 +1014,50 @@ module.exports = {
                     .replace(/{avatar}/g, interaction.user.displayAvatarURL());
                 await interaction.user.send(`**Test Welcome Message:**\n\n${processedMessage}`);
             } else {
-                // Create a mock member object for testing
-                const mockMember = {
-                    user: interaction.user
-                };
+                const title = await database.getConfig('welcome_embed_title') || 'Welcome to the Server!';
+                const description = await database.getConfig('welcome_embed_description') || 'Welcome!';
+                const color = await database.getConfig('welcome_embed_color') || '#00FF00';
+                const thumbnail = await database.getConfig('welcome_embed_thumbnail');
+                const image = await database.getConfig('welcome_embed_image');
+                const footer = await database.getConfig('welcome_embed_footer');
                 
-                // Use the same method that handles real welcomes
-                const bot = interaction.client.shopBot || interaction.client;
-                await bot.sendEmbedWelcome(mockMember);
+                // Process variables for test using the command user
+                const processedTitle = title
+                    .replace(/{username}/g, interaction.user.username)
+                    .replace(/{avatar}/g, interaction.user.displayAvatarURL());
+                const processedDescription = description
+                    .replace(/{username}/g, interaction.user.username)
+                    .replace(/{avatar}/g, interaction.user.displayAvatarURL());
+                const processedFooter = footer ? footer
+                    .replace(/{username}/g, interaction.user.username)
+                    .replace(/{avatar}/g, interaction.user.displayAvatarURL()) : null;
+                
+                const embed = new EmbedBuilder()
+                    .setTitle(processedTitle)
+                    .setDescription(processedDescription)
+                    .setColor(color);
+                
+                if (thumbnail) {
+                    const processedThumbnail = thumbnail
+                        .replace(/{username}/g, interaction.user.username)
+                        .replace(/{avatar}/g, interaction.user.displayAvatarURL());
+                    embed.setThumbnail(processedThumbnail);
+                } else {
+                    embed.setThumbnail(interaction.user.displayAvatarURL());
+                }
+                
+                if (image) {
+                    const processedImage = image
+                        .replace(/{username}/g, interaction.user.username)
+                        .replace(/{avatar}/g, interaction.user.displayAvatarURL());
+                    embed.setImage(processedImage);
+                }
+                
+                if (processedFooter) {
+                    embed.setFooter({ text: processedFooter });
+                }
+                
+                await interaction.user.send({ embeds: [embed] });
             }
             
             await interaction.reply({ content: '✅ Test welcome message sent to your DMs!', ephemeral: true });
