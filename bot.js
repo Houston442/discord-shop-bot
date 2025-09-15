@@ -279,44 +279,67 @@ class ShopBot {
     }
 
     async sendEmbedWelcome(member) {
-        const title = await this.database.getConfig('welcome_embed_title') || 'Welcome to the Server!';
-        const description = await this.database.getConfig('welcome_embed_description') || 'Welcome!';
-        const color = await this.database.getConfig('welcome_embed_color') || '#00FF00';
-        const thumbnail = await this.database.getConfig('welcome_embed_thumbnail');
-        const image = await this.database.getConfig('welcome_embed_image');
-        const footer = await this.database.getConfig('welcome_embed_footer');
-        
-        // Process variables in title and description
-        const processedTitle = this.processWelcomeVariables(title, member);
-        const processedDescription = this.processWelcomeVariables(description, member);
-        const processedFooter = footer ? this.processWelcomeVariables(footer, member) : null;
-        
-        const embed = new EmbedBuilder()
-            .setTitle(processedTitle)
-            .setDescription(processedDescription)
-            .setColor(color);
-        
-        // Handle thumbnail - use {avatar} variable or default to user avatar
-        if (thumbnail) {
-            const processedThumbnail = this.processWelcomeVariables(thumbnail, member);
-            embed.setThumbnail(processedThumbnail);
-        } else {
-            embed.setThumbnail(member.user.displayAvatarURL());
+        try {
+            const title = await this.database.getConfig('welcome_embed_title') || 'Welcome to the Server!';
+            const description = await this.database.getConfig('welcome_embed_description') || 'Welcome!';
+            const color = await this.database.getConfig('welcome_embed_color') || '#00FF00';
+            const thumbnail = await this.database.getConfig('welcome_embed_thumbnail');
+            const image = await this.database.getConfig('welcome_embed_image');
+            const footer = await this.database.getConfig('welcome_embed_footer');
+            
+            // Process variables in title and description
+            const processedTitle = this.processWelcomeVariables(title, member);
+            const processedDescription = this.processWelcomeVariables(description, member);
+            const processedFooter = footer ? this.processWelcomeVariables(footer, member) : null;
+            
+            const embed = new EmbedBuilder()
+                .setTitle(processedTitle)
+                .setDescription(processedDescription)
+                .setColor(color);
+            
+            // Handle thumbnail with proper variable processing and validation
+            if (thumbnail && thumbnail.trim() !== '') {
+                const processedThumbnail = this.processWelcomeVariables(thumbnail, member);
+                
+                // Only set thumbnail if it's a valid URL after processing
+                if (processedThumbnail && processedThumbnail.startsWith('http')) {
+                    embed.setThumbnail(processedThumbnail);
+                } else {
+                    // If not a valid URL, use user's avatar as fallback
+                    embed.setThumbnail(member.user.displayAvatarURL());
+                }
+            } else {
+                // Default to user's avatar if no thumbnail configured
+                embed.setThumbnail(member.user.displayAvatarURL());
+            }
+            
+            // Handle image with proper variable processing
+            if (image && image.trim() !== '') {
+                const processedImage = this.processWelcomeVariables(image, member);
+                
+                // Only set image if it's a valid URL after processing
+                if (processedImage && processedImage.startsWith('http')) {
+                    embed.setImage(processedImage);
+                }
+            }
+            
+            if (processedFooter) {
+                embed.setFooter({ text: processedFooter });
+            }
+            
+            await member.send({ embeds: [embed] });
+            
+        } catch (error) {
+            console.error('Error sending embed welcome:', error);
+            // Try to send a basic fallback message
+            try {
+                await member.send('Welcome to the server!');
+            } catch (fallbackError) {
+                console.error('Could not send any welcome message:', fallbackError);
+            }
         }
-        
-        // Handle image - process variables if set
-        if (image) {
-            const processedImage = this.processWelcomeVariables(image, member);
-            embed.setImage(processedImage);
-        }
-        
-        if (processedFooter) {
-            embed.setFooter({ text: processedFooter });
-        }
-        
-        await member.send({ embeds: [embed] });
     }
-
+    
     async sendTextWelcome(member) {
         const welcomeMessage = await this.database.getWelcomeMessage();
         const processedMessage = this.processWelcomeVariables(welcomeMessage || 'Welcome! Thanks for joining our server.', member);
